@@ -185,6 +185,36 @@ export default function Home() {
     }
   }, [status, router]);
 
+  const fetchHistory = async (botId: string) => {
+    try {
+      setIsLoading(true);
+      const res = await fetch(`/api/chat/history?botId=${botId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+           setMessages(data.map((m: any) => ({
+               id: m.id,
+               role: m.role as 'user' | 'assistant' | 'system',
+               content: m.content
+           })));
+        } else {
+           setMessages([]);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch history', e);
+      setMessages([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeAgentId && status === 'authenticated') {
+       fetchHistory(activeAgentId);
+    }
+  }, [activeAgentId, status]);
+
   // Don't render anything while the session is being checked or if redirecting
   if (status === 'loading' || status === 'unauthenticated') return null;
 
@@ -208,6 +238,17 @@ export default function Home() {
     setIsLoading(true);
 
     try {
+      // 1. Save user message to database in the background
+      fetch('/api/chat/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          botId: activeAgentId,
+          role: 'user',
+          content: messageText
+        })
+      }).catch(err => console.error('Failed to save user message:', err));
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -264,6 +305,17 @@ export default function Home() {
       };
 
       setMessages(prev => [...prev, newAiMessage]);
+
+      // 2. Save AI message to database in the background
+      fetch('/api/chat/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          botId: activeAgentId,
+          role: 'assistant',
+          content: aiContent
+        })
+      }).catch(err => console.error('Failed to save AI message:', err));
 
     } catch (error) {
       // Network failure, timeout, or unexpected crash — show as a normal assistant bubble
