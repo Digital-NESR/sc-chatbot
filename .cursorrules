@@ -1,0 +1,11 @@
+# Cursor Rules for Supply Chain AI
+
+CRITICAL RULE: All static text strings, image URLs, and UI colors must be defined in config/site.ts. Never hardcode text, hex codes, or image links directly into React components. Always import from config/site.ts.
+
+## Guidelines
+
+1. **Text Strings**: Every user-visible string (labels, placeholders, error messages, tooltips) must come from `siteConfig.text.*`.
+2. **Colors**: All brand colors and custom hex values must be defined in `siteConfig.colors.*`. Use Tailwind utility classes (e.g., `bg-nesr-green`) for the primary brand color, which is configured via `globals.css @theme`. For any other custom colors, reference `siteConfig.colors.*` via inline styles.
+3. **Images**: All image paths (logos, avatars, icons) must come from `siteConfig.images.*`.
+4. **Suggestions & Agents**: Suggestion prompts and agent definitions live in `siteConfig.suggestions` and `siteConfig.agents`.
+5. **Adding New Values**: When adding new UI text, colors, or images, always add them to `src/config/site.ts` first, then import and use them in the component.
