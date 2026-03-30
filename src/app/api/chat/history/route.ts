@@ -1,18 +1,21 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { prisma } from '@/lib/prisma';
 
-export const dynamic = 'force-dynamic'; // ✅ Moved safely below the imports
+export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+
+    // 1. Strictly extract the email so TypeScript doesn't panic
+    const userEmail = session?.user?.email;
+    if (!userEmail) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { searchParams } = new URL(request.url);
-    const botId = searchParams.get('botId');
+    // 2. Use Next.js's built-in URL parser instead of the standard JS one
+    const botId = request.nextUrl.searchParams.get('botId');
 
     if (!botId) {
         return NextResponse.json({ error: 'Missing botId' }, { status: 400 });
@@ -22,7 +25,7 @@ export async function GET(request: Request) {
         const chatSession = await prisma.chatSession.findUnique({
             where: {
                 userId_botId: {
-                    userId: session.user.email,
+                    userId: userEmail,
                     botId: botId,
                 },
             },
@@ -35,7 +38,6 @@ export async function GET(request: Request) {
             },
         });
 
-        // ChatSession will hold array of messages, or null
         return NextResponse.json(chatSession?.messages || []);
     } catch (error) {
         console.error('Failed to fetch chat history:', error);
