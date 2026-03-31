@@ -10,15 +10,13 @@ datasource db {
 }
 
 model ChatSession {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
   botId     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  title     String    @default("New Conversation")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   messages  Message[]
-
-  @@unique([userId, botId])
 }
 
 model Message {

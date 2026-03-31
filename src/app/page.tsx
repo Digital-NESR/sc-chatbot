@@ -17,6 +17,13 @@ interface Message {
   content: string;
 }
 
+interface ChatSessionMeta {
+  id: string;
+  botId: string;
+  title: string;
+  updatedAt: string;
+}
+
 /* ── Assistant Bubble (own component so each message has independent state) ── */
 function AssistantBubble({ content }: { content: string }) {
   const [copied, setCopied] = useState(false);
@@ -148,9 +155,8 @@ export default function Home() {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Unique session ID for this tab — persists until the user refreshes.
-  // Sent with every message so n8n can group them into a conversation thread.
-  const [sessionId] = useState<string>(() => crypto.randomUUID());
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<ChatSessionMeta[]>([]);
 
   // Start with empty messages to show the Welcome View
   const [messages, setMessages] = useState<Message[]>([]);
@@ -185,21 +191,34 @@ export default function Home() {
     }
   }, [status, router]);
 
-  const fetchHistory = async (botId: string) => {
+  const fetchSessions = async () => {
     try {
-      setIsLoading(true);
-      const res = await fetch(`/api/chat/history?botId=${botId}`);
+      const res = await fetch('/api/chat/sessions');
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data)) {
-           setMessages(data.map((m: any) => ({
-               id: m.id,
-               role: m.role as 'user' | 'assistant' | 'system',
-               content: m.content
-           })));
-        } else {
-           setMessages([]);
-        }
+        setSessions(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch sessions', e);
+    }
+  };
+
+  const loadSessionHistory = async (sessionId: string, botId: string) => {
+    try {
+      setIsLoading(true);
+      const res = await fetch(`/api/chat/history?sessionId=${sessionId}`);
+      if (res.ok) {
+         const data = await res.json();
+         if (Array.isArray(data)) {
+             setMessages(data.map((m: any) => ({
+                 id: m.id,
+                 role: m.role as 'user' | 'assistant' | 'system',
+                 content: m.content
+             })));
+             setActiveSessionId(sessionId);
+             setActiveAgentId(botId as AgentId);
+             setIsSidebarOpen(false);
+         }
       }
     } catch (e) {
       console.error('Failed to fetch history', e);
@@ -210,16 +229,17 @@ export default function Home() {
   };
 
   useEffect(() => {
-    if (activeAgentId && status === 'authenticated') {
-       fetchHistory(activeAgentId);
+    if (status === 'authenticated') {
+       fetchSessions();
     }
-  }, [activeAgentId, status]);
+  }, [status]);
 
   // Don't render anything while the session is being checked or if redirecting
   if (status === 'loading' || status === 'unauthenticated') return null;
 
   const handleAgentChange = (id: AgentId) => {
     setActiveAgentId(id);
+    setActiveSessionId(null);
     setMessages([]); // Clear chat effectively starts new session
     setIsSidebarOpen(false); // Close sidebar on mobile after selecting agent
   };
@@ -238,16 +258,31 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-      // 1. Save user message to database in the background
-      fetch('/api/chat/message', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          botId: activeAgentId,
-          role: 'user',
-          content: messageText
-        })
-      }).catch(err => console.error('Failed to save user message:', err));
+      // 1. Save user message to database
+      let currentSessionId = activeSessionId;
+      try {
+        const saveRes = await fetch('/api/chat/message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: currentSessionId,
+            botId: activeAgentId,
+            role: 'user',
+            content: messageText
+          })
+        });
+
+        if (saveRes.ok) {
+           const saveData = await saveRes.json();
+           if (saveData.sessionId && !currentSessionId) {
+               currentSessionId = saveData.sessionId;
+               setActiveSessionId(currentSessionId);
+               fetchSessions(); // refresh history sidebar
+           }
+        }
+      } catch (err) {
+        console.error('Failed to save user message:', err);
+      }
 
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -258,7 +293,7 @@ export default function Home() {
           webhookUrl: activeAgent.webhookUrl,
           message: messageText,
           agent: activeAgent.name,
-          sessionId,
+          sessionId: currentSessionId || crypto.randomUUID(),
         }),
       });
 
@@ -307,15 +342,18 @@ export default function Home() {
       setMessages(prev => [...prev, newAiMessage]);
 
       // 2. Save AI message to database in the background
-      fetch('/api/chat/message', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          botId: activeAgentId,
-          role: 'assistant',
-          content: aiContent
-        })
-      }).catch(err => console.error('Failed to save AI message:', err));
+      if (currentSessionId) {
+        fetch('/api/chat/message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: currentSessionId,
+            botId: activeAgentId,
+            role: 'assistant',
+            content: aiContent
+          })
+        }).catch(err => console.error('Failed to save AI message:', err));
+      }
 
     } catch (error) {
       // Network failure, timeout, or unexpected crash — show as a normal assistant bubble
@@ -392,7 +430,10 @@ export default function Home() {
 
           {/* New Chat Button */}
           <button
-            onClick={() => setMessages([])}
+            onClick={() => {
+                setMessages([]);
+                setActiveSessionId(null);
+            }}
             className="w-full flex items-center justify-start gap-3 bg-white border border-gray-200 hover:bg-gray-50 active:bg-gray-100 text-gray-700 transition-all py-2.5 px-4 rounded-xl shadow-sm hover:shadow text-sm font-medium group"
           >
             <Plus size={18} className="text-gray-400 group-hover:text-nesr-green transition-colors" />
@@ -401,13 +442,13 @@ export default function Home() {
         </div>
 
         {/* Agent List */}
-        <div className="flex-1 overflow-y-auto px-4 py-6 space-y-1">
+        <div className="flex-none max-h-[40%] overflow-y-auto px-4 pt-6 pb-2 space-y-1">
           <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-2">
             {text.agentsLabel}
           </div>
 
           {agents.map((agent) => {
-            const isActive = activeAgentId === agent.id;
+            const isActive = activeAgentId === agent.id && activeSessionId === null;
             return (
               <button
                 key={agent.id}
@@ -438,6 +479,32 @@ export default function Home() {
                 </div>
               </button>
             );
+          })}
+        </div>
+        
+        {/* Chat History List */}
+        <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-1 mt-4 border-t border-gray-100 pt-4">
+          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-2">
+            Chat History
+          </div>
+          {sessions.map(session => {
+              const sessionAgent = agents.find(a => a.id === session.botId);
+              const isActive = activeSessionId === session.id;
+              return (
+                  <button
+                     key={session.id}
+                     onClick={() => loadSessionHistory(session.id, session.botId)}
+                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm font-medium relative group ${isActive ? 'bg-nesr-green/10 text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
+                  >
+                      {isActive && (
+                          <div className="absolute left-0 top-1 bottom-1 w-1 bg-nesr-green rounded-r-md" />
+                      )}
+                      <div className="flex flex-col items-start min-w-0 text-left w-full">
+                           <span className={`truncate w-full ${isActive ? 'font-semibold text-nesr-green' : ''}`}>{session.title}</span>
+                           <span className="text-[10px] text-gray-400 uppercase tracking-wider truncate w-full">{sessionAgent?.name || 'Bot'}</span>
+                      </div>
+                  </button>
+              );
           })}
         </div>
 

@@ -15,19 +15,17 @@ export async function GET(request: NextRequest) {
     }
 
     // 2. Use Next.js's built-in URL parser instead of the standard JS one
-    const botId = request.nextUrl.searchParams.get('botId');
+    const sessionId = request.nextUrl.searchParams.get('sessionId');
 
-    if (!botId) {
-        return NextResponse.json({ error: 'Missing botId' }, { status: 400 });
+    if (!sessionId) {
+        return NextResponse.json({ error: 'Missing sessionId' }, { status: 400 });
     }
 
     try {
-        const chatSession = await prisma.chatSession.findUnique({
+        const chatSession = await prisma.chatSession.findFirst({
             where: {
-                userId_botId: {
-                    userId: userEmail,
-                    botId: botId,
-                },
+                id: sessionId,
+                userId: userEmail, // Ensure the session belongs to the current user
             },
             include: {
                 messages: {
@@ -38,7 +36,11 @@ export async function GET(request: NextRequest) {
             },
         });
 
-        return NextResponse.json(chatSession?.messages || []);
+        if (!chatSession) {
+             return NextResponse.json({ error: 'Session not found or unauthorized' }, { status: 404 });
+        }
+
+        return NextResponse.json(chatSession.messages || []);
     } catch (error) {
         console.error('Failed to fetch chat history:', error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
