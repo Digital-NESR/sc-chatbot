@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
-import { ArrowUp, Plus, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2 } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
@@ -244,6 +244,25 @@ export default function Home() {
     setIsSidebarOpen(false); // Close sidebar on mobile after selecting agent
   };
 
+  const handleDeleteSession = async (sessionId: string) => {
+    // Optimistic UI update — remove from the sidebar immediately
+    setSessions(prev => prev.filter(s => s.id !== sessionId));
+
+    // If the deleted session is currently active, clear the view
+    if (activeSessionId === sessionId) {
+      setActiveSessionId(null);
+      setMessages([]);
+    }
+
+    try {
+      await fetch(`/api/chat/session/${sessionId}`, { method: 'DELETE' });
+    } catch (err) {
+      console.error('Failed to delete session:', err);
+      // Re-fetch to restore state if the API call failed
+      fetchSessions();
+    }
+  };
+
   const sendMessage = async (messageText: string) => {
     if (!messageText.trim() || isLoading) return;
 
@@ -415,8 +434,8 @@ export default function Home() {
       <aside className={`fixed inset-y-0 left-0 z-50 w-[280px] bg-gray-50 border-r border-gray-100 flex-shrink-0 flex flex-col h-full transform transition-transform duration-200 ease-in-out md:relative md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
 
         {/* Branding Header */}
-        <div className="p-6 pb-2">
-          <div className="flex items-center gap-3 mb-8">
+        <div className="p-6 pb-4">
+          <div className="flex items-center gap-3">
             <div className="relative h-8 w-8 rounded-full overflow-hidden shadow-sm ring-1 ring-gray-200">
               <Image
                 src={images.logo}
@@ -427,18 +446,6 @@ export default function Home() {
             </div>
             <h1 className="text-lg font-bold text-gray-900 tracking-tight">{text.sidebarTitle}</h1>
           </div>
-
-          {/* New Chat Button */}
-          <button
-            onClick={() => {
-                setMessages([]);
-                setActiveSessionId(null);
-            }}
-            className="w-full flex items-center justify-start gap-3 bg-white border border-gray-200 hover:bg-gray-50 active:bg-gray-100 text-gray-700 transition-all py-2.5 px-4 rounded-xl shadow-sm hover:shadow text-sm font-medium group"
-          >
-            <Plus size={18} className="text-gray-400 group-hover:text-nesr-green transition-colors" />
-            <span>{text.newChatButton}</span>
-          </button>
         </div>
 
         {/* Agent List */}
@@ -491,19 +498,29 @@ export default function Home() {
               const sessionAgent = agents.find(a => a.id === session.botId);
               const isActive = activeSessionId === session.id;
               return (
-                  <button
+                  <div
                      key={session.id}
                      onClick={() => loadSessionHistory(session.id, session.botId)}
-                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm font-medium relative group ${isActive ? 'bg-nesr-green/10 text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
+                     className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg transition-all text-sm font-medium relative group cursor-pointer ${isActive ? 'bg-nesr-green/10 text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
                   >
                       {isActive && (
                           <div className="absolute left-0 top-1 bottom-1 w-1 bg-nesr-green rounded-r-md" />
                       )}
-                      <div className="flex flex-col items-start min-w-0 text-left w-full">
+                      <div className="flex flex-col items-start min-w-0 text-left flex-1 overflow-hidden">
                            <span className={`truncate w-full ${isActive ? 'font-semibold text-nesr-green' : ''}`}>{session.title}</span>
                            <span className="text-[10px] text-gray-400 uppercase tracking-wider truncate w-full">{sessionAgent?.name || 'Bot'}</span>
                       </div>
-                  </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteSession(session.id);
+                        }}
+                        aria-label="Delete chat"
+                        className="opacity-0 group-hover:opacity-100 flex-shrink-0 p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all duration-150"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                  </div>
               );
           })}
         </div>

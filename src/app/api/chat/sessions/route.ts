@@ -16,6 +16,7 @@ export async function GET() {
         const chatSessions = await prisma.chatSession.findMany({
             where: {
                 userId: session.user.email,
+                isDeleted: false,
             },
             orderBy: {
                 updatedAt: 'desc',
