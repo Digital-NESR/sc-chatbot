@@ -92,9 +92,9 @@ export const siteConfig = {
             'Can I create a new material for: ',
         ],
         logistics: [
-            'What is the policy for ',
-            'Who is the MM Focal point for: ',
-            'Provide a logistics summary for: ',
+            'What is the SC policy for: ',
+            'Summarize the policy on: ',
+            'Who is responsible for the policy on: ',
         ],
         sourceguide: [
             'Which Supplier to use for Laptops in HQ Dubai?',
@@ -116,11 +116,11 @@ export const siteConfig = {
         },
         {
             id: 'logistics',
-            name: 'Logistics AI',
+            name: 'SC Policy AI',
             icon: Truck,
-            description: 'Shipping & Routing Expert',
-            tagline: 'How can I help you optimize your logistics today?',
-            disclaimer: 'Verify critical logistics data before shipping',
+            description: 'Supply Chain Policy Expert',
+            tagline: 'How can I help you navigate Supply Chain policies today?',
+            disclaimer: 'Always verify policy details with the relevant authority',
             webhookUrl: process.env.NEXT_PUBLIC_LOGISTICS_WEBHOOK || '',
         },
         {
