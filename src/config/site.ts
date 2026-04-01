@@ -67,7 +67,7 @@ export const siteConfig = {
         errorMessage:
             'Detailed error: Unable to connect to the agent. Please try again later.',
         genericError:
-            'Chatbot is not available right now. Please try again later.',
+            'Chatbot is not available due to high demand right now. Please try again later.',
 
         // Login page
         login: {

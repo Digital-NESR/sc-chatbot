@@ -37,20 +37,20 @@ export async function POST(request: Request) {
             });
             currentSessionId = chatSession.id;
         } else {
-             const existingSession = await prisma.chatSession.findFirst({
-                 where: {
-                     id: currentSessionId,
-                     userId: session.user.email
-                 }
-             });
-             if (!existingSession) {
-                 return NextResponse.json({ error: 'Session not found or unauthorized' }, { status: 404 });
-             }
+            const existingSession = await prisma.chatSession.findFirst({
+                where: {
+                    id: currentSessionId,
+                    userId: session.user.email
+                }
+            });
+            if (!existingSession) {
+                return NextResponse.json({ error: 'Session not found or unauthorized' }, { status: 404 });
+            }
 
-             await prisma.chatSession.update({
-                 where: { id: currentSessionId },
-                 data: { updatedAt: new Date() }
-             });
+            await prisma.chatSession.update({
+                where: { id: currentSessionId },
+                data: { updatedAt: new Date() }
+            });
         }
 
         const newMessage = await prisma.message.create({
