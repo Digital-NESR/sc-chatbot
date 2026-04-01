@@ -98,6 +98,16 @@ function AssistantBubble({ content }: { content: string }) {
           h1: ({ children }) => <h1 className="text-base font-bold mb-2 mt-3 text-black">{children}</h1>,
           h2: ({ children }) => <h2 className="text-sm font-bold mb-2 mt-3 text-black">{children}</h2>,
           h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 mt-2 text-slate-800">{children}</h3>,
+          a: ({ href, children }) => (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:text-blue-800 underline break-words"
+            >
+              {children}
+            </a>
+          ),
         }}
       >
         {content}
@@ -660,7 +670,21 @@ export default function Home() {
                       <div
                         className="relative p-4 text-sm leading-relaxed shadow-sm transition-all duration-200 hover:shadow-md bg-red-50 text-red-600 rounded-xl border border-red-100"
                       >
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            a: ({ href, children }) => (
+                              <a
+                                href={href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800 underline break-words"
+                              >
+                                {children}
+                              </a>
+                            ),
+                          }}
+                        >
                           {msg.content}
                         </ReactMarkdown>
                       </div>
