@@ -3,6 +3,7 @@ import { authOptions } from '@/lib/authOptions';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
+import { isAdmin } from '@/lib/admin';
 
 export const metadata = {
     title: 'Admin Dashboard | Supply Chain AI',
@@ -15,19 +16,19 @@ export default async function AdminLayout({
 }) {
     const session = await getServerSession(authOptions);
 
-    if (!session || session.user?.email !== 'mfarhan1@nesr.com') {
+    if (!session || !isAdmin(session.user?.email)) {
         redirect('/');
     }
 
     return (
         <div className="flex flex-col min-h-screen bg-slate-50">
             {/* Admin Header */}
-            <header className="bg-slate-900 text-white shadow-md">
+            <header className="bg-[#307c4c] text-white shadow-md">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <Link 
                             href="/" 
-                            className="p-2 rounded-full hover:bg-slate-800 transition-colors"
+                            className="p-2 rounded-full hover:bg-white/10 transition-colors"
                             title="Back to Chat"
                         >
                             <ArrowLeft className="w-5 h-5 text-slate-300" />
@@ -35,8 +36,8 @@ export default async function AdminLayout({
                         <h1 className="text-lg font-semibold tracking-tight">Admin Dashboard</h1>
                     </div>
                     <div className="flex items-center gap-3 text-sm">
-                        <span className="text-slate-400">Logged in as</span>
-                        <span className="font-medium px-3 py-1 bg-slate-800 rounded-full border border-slate-700">
+                        <span className="text-white/80">Logged in as</span>
+                        <span className="font-medium px-3 py-1 bg-white/10 rounded-full border border-white/20">
                             {session.user.email}
                         </span>
                     </div>

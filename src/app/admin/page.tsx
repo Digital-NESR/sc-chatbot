@@ -104,7 +104,7 @@ export default function AdminDashboard() {
                 <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 bg-slate-50 relative">
                     {loadingMessages ? (
                         <div className="absolute inset-0 flex items-center justify-center bg-slate-50">
-                            <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+                        <Loader2 className="w-8 h-8 animate-spin text-[#307c4c]" />
                         </div>
                     ) : (
                         messages.length === 0 ? (
@@ -216,7 +216,7 @@ export default function AdminDashboard() {
                 <div className="flex-1 overflow-y-auto p-0">
                     {loadingSessions ? (
                         <div className="flex items-center justify-center h-full">
-                            <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+                        <Loader2 className="w-8 h-8 animate-spin text-[#307c4c]" />
                         </div>
                     ) : (
                         <table className="w-full text-left border-collapse">
@@ -240,7 +240,7 @@ export default function AdminDashboard() {
                                         <tr 
                                             key={session.id} 
                                             onClick={() => setSelectedSession(session)}
-                                            className="hover:bg-slate-50 cursor-pointer transition-colors group"
+                                            className="hover:bg-[#307c4c]/5 cursor-pointer transition-colors group"
                                         >
                                             <td className="p-4 pl-6 font-medium text-slate-800">
                                                 <div className="flex items-center gap-3">
@@ -257,7 +257,7 @@ export default function AdminDashboard() {
                                                 {new Date(session.createdAt).toLocaleDateString()}
                                             </td>
                                             <td className="p-4 pr-6 text-right">
-                                                <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-slate-600 transition-colors" />
+                                                <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-[#307c4c] transition-colors" />
                                             </td>
                                         </tr>
                                     ))
@@ -313,7 +313,7 @@ export default function AdminDashboard() {
                                         <tr 
                                             key={user.email} 
                                             onClick={() => setSelectedUser(user)}
-                                            className="hover:bg-slate-50 cursor-pointer transition-colors group"
+                                            className="hover:bg-[#307c4c]/5 cursor-pointer transition-colors group"
                                         >
                                             <td className="p-4 pl-6">
                                                 <div className="flex items-center gap-3">

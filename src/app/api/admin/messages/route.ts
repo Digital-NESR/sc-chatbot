@@ -2,12 +2,13 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { prisma } from '@/lib/prisma';
+import { isAdmin } from '@/lib/admin';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
     const session = await getServerSession(authOptions);
-    if (session?.user?.email !== 'mfarhan1@nesr.com') {
+    if (!isAdmin(session?.user?.email)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

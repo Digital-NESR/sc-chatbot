@@ -2,7 +2,19 @@ import { withAuth } from 'next-auth/middleware';
 import { NextResponse } from 'next/server';
 
 export default withAuth(
-    () => NextResponse.next(),
+    (req) => {
+        if (req.nextUrl.pathname.startsWith('/admin')) {
+            const adminEmails = (process.env.ADMIN_EMAILS || 'mfarhan1@nesr.com')
+                .split(',')
+                .map(e => e.trim().toLowerCase());
+            
+            const userEmail = req.nextauth.token?.email?.toLowerCase() || '';
+            if (!adminEmails.includes(userEmail)) {
+                return NextResponse.redirect(new URL('/', req.url));
+            }
+        }
+        return NextResponse.next();
+    },
     {
         callbacks: {
             authorized: ({ token }) => !!token,
