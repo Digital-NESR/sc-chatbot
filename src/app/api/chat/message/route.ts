@@ -33,6 +33,8 @@ export async function POST(request: Request) {
                     userId: session.user.email,
                     botId: botId,
                     title: newTitle,
+                    displayName: session.user.displayName,
+                    jobTitle: session.user.jobTitle,
                 },
             });
             currentSessionId = chatSession.id;

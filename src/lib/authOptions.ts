@@ -1,7 +1,6 @@
 import NextAuth from 'next-auth';
 import AzureADProvider from 'next-auth/providers/azure-ad';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { prisma } from '@/lib/prisma';
 
 import type { NextAuthOptions } from 'next-auth';
 
@@ -75,28 +74,6 @@ export const authOptions: NextAuthOptions = {
                     console.error("Failed to fetch Graph API data", error);
                     if (!token.jobTitle) token.jobTitle = "NESR Employee";
                     if (!token.displayName) token.displayName = token.name || user?.name || "User";
-                }
-            }
-
-            // 3. Upsert User in DB on Login
-            if (user || account) {
-                try {
-                    if (token.email) {
-                        await prisma.user.upsert({
-                            where: { email: token.email },
-                            update: {
-                                displayName: (token.displayName || token.name || "User") as string,
-                                jobTitle: (token.jobTitle || null) as string | null,
-                            },
-                            create: {
-                                email: token.email,
-                                displayName: (token.displayName || token.name || "User") as string,
-                                jobTitle: (token.jobTitle || null) as string | null,
-                            }
-                        });
-                    }
-                } catch (error) {
-                    console.error("Error upserting user in DB:", error);
                 }
             }
 
