@@ -27,6 +27,13 @@ export async function GET() {
 
         // Group by user
         const userMap = new Map<string, any>();
+        
+        // Group by date for time-series charts
+        const timeSeriesMap = new Map<string, any>();
+        let activeTodayCount = 0;
+        
+        // Use local timezone format or a strict UTC split. YYYY-MM-DD
+        const todayStr = new Date().toLocaleDateString('en-CA'); // 'YYYY-MM-DD' in local timezone
 
         for (const s of sessions) {
             if (!userMap.has(s.userId)) {
@@ -68,6 +75,30 @@ export async function GET() {
 
             const currentAgentCount = userData.agentCounts[s.botId] || 0;
             userData.agentCounts[s.botId] = currentAgentCount + 1;
+            
+            // Build time series data
+            const sessionDate = new Date(s.updatedAt);
+            const dateStr = sessionDate.toLocaleDateString('en-CA'); // 'YYYY-MM-DD'
+            
+            if (dateStr === todayStr) {
+                activeTodayCount++;
+            }
+
+            if (!timeSeriesMap.has(dateStr)) {
+                timeSeriesMap.set(dateStr, {
+                    date: dateStr,
+                    totalSessions: 0,
+                    totalMessages: 0,
+                    agents: {}
+                });
+            }
+            
+            const dayData = timeSeriesMap.get(dateStr);
+            dayData.totalSessions += 1;
+            dayData.totalMessages += s._count.messages;
+            
+            const dayAgentCount = dayData.agents[s.botId] || 0;
+            dayData.agents[s.botId] = dayAgentCount + 1;
         }
 
         const users = Array.from(userMap.values()).map(user => {
@@ -88,7 +119,14 @@ export async function GET() {
 
         users.sort((a, b) => b.totalMessages - a.totalMessages);
 
-        return NextResponse.json({ users });
+        // Sort time series chronologically
+        const timeSeriesData = Array.from(timeSeriesMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+
+        return NextResponse.json({ 
+            users,
+            timeSeriesData,
+            activeTodayCount
+        });
     } catch (error) {
         console.error('Failed to fetch admin users:', error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

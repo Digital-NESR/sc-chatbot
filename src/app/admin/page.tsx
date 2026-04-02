@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { ChevronRight, ArrowLeft, Loader2, User, MessageSquare } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { ChevronRight, ArrowLeft, Loader2, User, MessageSquare, Users, Activity, BarChart2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { siteConfig } from '@/config/site';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 // Helper to get agent name
 const getAgentName = (botId: string) => {
@@ -14,7 +15,13 @@ const getAgentName = (botId: string) => {
 
 export default function AdminDashboard() {
     const [users, setUsers] = useState<any[]>([]);
+    const [timeSeriesData, setTimeSeriesData] = useState<any[]>([]);
+    const [activeTodayCount, setActiveTodayCount] = useState<number>(0);
     const [loadingUsers, setLoadingUsers] = useState(true);
+
+    const [selectedJobTitle, setSelectedJobTitle] = useState<string>('');
+    const [selectedAgentFilter, setSelectedAgentFilter] = useState<string>('');
+    const [chartMode, setChartMode] = useState<'combined' | 'agent'>('combined');
 
     const [selectedUser, setSelectedUser] = useState<any | null>(null);
     const [sessions, setSessions] = useState<any[]>([]);
@@ -31,7 +38,9 @@ export default function AdminDashboard() {
                 const res = await fetch('/api/admin/users');
                 if (res.ok) {
                     const data = await res.json();
-                    setUsers(data.users);
+                    setUsers(data.users || []);
+                    setTimeSeriesData(data.timeSeriesData || []);
+                    setActiveTodayCount(data.activeTodayCount || 0);
                 }
             } catch (err) {
                 console.error(err);
@@ -279,44 +288,182 @@ export default function AdminDashboard() {
         );
     }
 
+    // Derived UI State
+    const totalUsers = users.length;
+    const totalSessions = useMemo(() => users.reduce((acc, u) => acc + u.totalSessions, 0), [users]);
+    const totalMessages = useMemo(() => users.reduce((acc, u) => acc + u.totalMessages, 0), [users]);
+
+    const uniqueJobTitles = useMemo(() => {
+        const titles = new Set(users.map(u => u.jobTitle));
+        return Array.from(titles).filter(Boolean).sort();
+    }, [users]);
+
+    const uniqueAgents = useMemo(() => {
+        return siteConfig.agents.map(a => ({ id: a.id, name: a.name }));
+    }, []);
+
+    const filteredUsers = useMemo(() => {
+        return users.filter(u => {
+            if (selectedJobTitle && u.jobTitle !== selectedJobTitle) return false;
+            if (selectedAgentFilter && !u.agentCounts[selectedAgentFilter]) return false;
+            return true;
+        });
+    }, [users, selectedJobTitle, selectedAgentFilter]);
+
+    const chartColors = ['#e11d48', '#0284c7', '#d97706', '#7c3aed', '#10b981', '#f43f5e', '#3b82f6'];
+
     // Level 1: Users View
     return (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[80vh]">
-            <div className="p-4 sm:p-6 border-b border-slate-100">
-                <h2 className="text-lg font-semibold text-slate-800">Users Overview</h2>
-                <p className="text-sm text-slate-500">Select a user to view their chat history.</p>
+        <div className="flex flex-col gap-6">
+            {/* KPI Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col items-center justify-center text-center">
+                    <Users className="w-6 h-6 text-[#307c4c] mb-2" />
+                    <p className="text-sm font-medium text-slate-500 uppercase tracking-wider">Total Users</p>
+                    <p className="text-3xl font-bold text-slate-800 mt-1">{totalUsers}</p>
+                </div>
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col items-center justify-center text-center">
+                    <MessageSquare className="w-6 h-6 text-[#307c4c] mb-2" />
+                    <p className="text-sm font-medium text-slate-500 uppercase tracking-wider">Total Sessions</p>
+                    <p className="text-3xl font-bold text-slate-800 mt-1">{totalSessions}</p>
+                </div>
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col items-center justify-center text-center">
+                    <BarChart2 className="w-6 h-6 text-[#307c4c] mb-2" />
+                    <p className="text-sm font-medium text-slate-500 uppercase tracking-wider">Total Messages</p>
+                    <p className="text-3xl font-bold text-slate-800 mt-1">{totalMessages}</p>
+                </div>
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col items-center justify-center text-center outline outline-2 outline-offset-2 outline-[#307c4c]/20">
+                    <Activity className="w-6 h-6 text-[#307c4c] mb-2" />
+                    <p className="text-sm font-medium text-slate-500 uppercase tracking-wider">Active Today</p>
+                    <p className="text-3xl font-bold text-[#307c4c] mt-1">{activeTodayCount}</p>
+                </div>
             </div>
-            
-            <div className="flex-1 overflow-y-auto p-0">
-                {loadingUsers ? (
-                    <div className="flex items-center justify-center h-full">
-                        <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+
+            {/* Recharts Analytics */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+                    <div>
+                        <h2 className="text-lg font-semibold text-slate-800">Usage Over Time</h2>
+                        <p className="text-sm text-slate-500">Daily session volume across the platform.</p>
                     </div>
-                ) : (
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="bg-slate-50 border-b border-slate-200 text-sm text-slate-600 font-medium">
-                                <th className="p-4 pl-6 font-medium">User</th>
-                                <th className="p-4 font-medium hidden md:table-cell">Job Title</th>
-                                <th className="p-4 font-medium hidden sm:table-cell">Total Sessions</th>
-                                <th className="p-4 font-medium hidden sm:table-cell text-center">Active</th>
-                                <th className="p-4 font-medium hidden sm:table-cell text-center">Deleted</th>
-                                <th className="p-4 font-medium hidden sm:table-cell">Messages</th>
-                                <th className="p-4 font-medium hidden lg:table-cell">Avg Msg/Session</th>
-                                <th className="p-4 font-medium hidden xl:table-cell">Unique Agents</th>
-                                <th className="p-4 font-medium hidden md:table-cell">Last Active</th>
-                                <th className="p-4 w-10"></th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {users.length === 0 ? (
+                    <div className="flex bg-slate-100 p-1 rounded-lg">
+                        <button 
+                            onClick={() => setChartMode('combined')}
+                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${chartMode === 'combined' ? 'bg-white shadow-sm text-[#307c4c]' : 'text-slate-600 hover:text-slate-900'}`}
+                        >
+                            Combined
+                        </button>
+                        <button 
+                            onClick={() => setChartMode('agent')}
+                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${chartMode === 'agent' ? 'bg-white shadow-sm text-[#307c4c]' : 'text-slate-600 hover:text-slate-900'}`}
+                        >
+                            By Agent
+                        </button>
+                    </div>
+                </div>
+                
+                <div className="h-[300px] w-full">
+                    {timeSeriesData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={timeSeriesData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                <XAxis dataKey="date" tick={{fontSize: 12}} tickMargin={10} stroke="#94a3b8" />
+                                <YAxis tick={{fontSize: 12}} stroke="#94a3b8" />
+                                <Tooltip 
+                                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                    cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '5 5' }}
+                                />
+                                <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                                {chartMode === 'combined' ? (
+                                    <Line type="monotone" dataKey="totalSessions" name="Total Sessions" stroke="#307c4c" strokeWidth={3} dot={{r: 4}} activeDot={{r: 6}} />
+                                ) : (
+                                    uniqueAgents.map((agent, idx) => (
+                                        <Line 
+                                            key={agent.id} 
+                                            type="monotone" 
+                                            dataKey={(d) => d.agents[agent.id] || 0} 
+                                            name={agent.name} 
+                                            stroke={idx === 0 ? '#307c4c' : chartColors[idx % chartColors.length]} 
+                                            strokeWidth={2} 
+                                            dot={{r: 3}} 
+                                            activeDot={{r: 5}} 
+                                        />
+                                    ))
+                                )}
+                            </LineChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
+                            <BarChart2 className="w-10 h-10 mb-2 opacity-20" />
+                            <p>No time-series data available</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Users Table */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[700px]">
+                <div className="p-4 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h2 className="text-lg font-semibold text-slate-800">User Directory</h2>
+                        <p className="text-sm text-slate-500">Select a user to drill down into their specific chat history.</p>
+                    </div>
+                    
+                    {/* Slicers */}
+                    <div className="flex flex-col sm:flex-row gap-3">
+                        <select 
+                            value={selectedJobTitle}
+                            onChange={(e) => setSelectedJobTitle(e.target.value)}
+                            className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-[#307c4c] focus:border-[#307c4c] block w-full p-2.5"
+                        >
+                            <option value="">All Job Titles</option>
+                            {uniqueJobTitles.map((title: any) => (
+                                <option key={title} value={title}>{title}</option>
+                            ))}
+                        </select>
+                        <select 
+                            value={selectedAgentFilter}
+                            onChange={(e) => setSelectedAgentFilter(e.target.value)}
+                            className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-[#307c4c] focus:border-[#307c4c] block w-full p-2.5"
+                        >
+                            <option value="">All Agents</option>
+                            {uniqueAgents.map((agent: any) => (
+                                <option key={agent.id} value={agent.id}>{agent.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-0">
+                    {loadingUsers ? (
+                        <div className="flex items-center justify-center h-full">
+                            <Loader2 className="w-8 h-8 animate-spin text-[#307c4c]" />
+                        </div>
+                    ) : (
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-slate-50 border-b border-slate-200 text-sm text-slate-600 font-medium">
+                                    <th className="p-4 pl-6 font-medium">User</th>
+                                    <th className="p-4 font-medium hidden md:table-cell">Job Title</th>
+                                    <th className="p-4 font-medium hidden sm:table-cell">Total Sessions</th>
+                                    <th className="p-4 font-medium hidden sm:table-cell text-center">Active</th>
+                                    <th className="p-4 font-medium hidden sm:table-cell text-center">Deleted</th>
+                                    <th className="p-4 font-medium hidden sm:table-cell">Messages</th>
+                                    <th className="p-4 font-medium hidden lg:table-cell">Avg Msg/Session</th>
+                                    <th className="p-4 font-medium hidden xl:table-cell">Unique Agents</th>
+                                    <th className="p-4 font-medium hidden md:table-cell">Last Active</th>
+                                    <th className="p-4 w-10"></th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                            {filteredUsers.length === 0 ? (
                                 <tr>
                                     <td colSpan={10} className="p-8 text-center text-slate-500">
-                                        No users found.
+                                        No users match the current filters.
                                     </td>
                                 </tr>
                             ) : (
-                                users.map((user) => {
+                                filteredUsers.map((user) => {
                                     const hasMessages = user.totalMessages > 0;
                                     const isHighEngagement = user.totalMessages >= 20;
 
@@ -386,6 +533,7 @@ export default function AdminDashboard() {
                     </table>
                 )}
             </div>
+        </div>
         </div>
     );
 }
