@@ -14,13 +14,13 @@ export async function GET() {
 
     try {
         const sessions = await prisma.chatSession.findMany({
-            where: { isDeleted: false },
             select: {
                 userId: true,
                 displayName: true,
                 jobTitle: true,
                 botId: true,
                 updatedAt: true,
+                isDeleted: true,
                 _count: { select: { messages: true } }
             }
         });
@@ -35,6 +35,8 @@ export async function GET() {
                     displayName: s.displayName || 'Unknown',
                     jobTitle: s.jobTitle || 'Unknown',
                     totalSessions: 0,
+                    activeSessions: 0,
+                    deletedSessions: 0,
                     totalMessages: 0,
                     lastActiveDate: new Date(0), // Setup initial epoch
                     agentCounts: {}
@@ -51,6 +53,11 @@ export async function GET() {
             }
 
             userData.totalSessions += 1;
+            if (s.isDeleted) {
+                userData.deletedSessions += 1;
+            } else {
+                userData.activeSessions += 1;
+            }
             userData.totalMessages += s._count.messages;
 
             // Track last active date

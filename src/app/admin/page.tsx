@@ -244,8 +244,17 @@ export default function AdminDashboard() {
                                         >
                                             <td className="p-4 pl-6 font-medium text-slate-800">
                                                 <div className="flex items-center gap-3">
-                                                    <MessageSquare className="w-4 h-4 text-slate-400 group-hover:text-[#307c4c]" />
-                                                    <span className="truncate max-w-[200px] sm:max-w-[400px] inline-block">{session.title}</span>
+                                                    <MessageSquare className={`w-4 h-4 ${session.isDeleted ? 'text-red-300' : 'text-slate-400 group-hover:text-[#307c4c]'}`} />
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`truncate max-w-[150px] sm:max-w-[300px] inline-block ${session.isDeleted ? 'line-through text-slate-400 italic' : ''}`}>
+                                                            {session.title}
+                                                        </span>
+                                                        {session.isDeleted && (
+                                                            <span className="bg-red-100/80 border border-red-200 text-red-700 text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full whitespace-nowrap">
+                                                                Deleted
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </td>
                                             <td className="p-4 text-slate-600 hidden sm:table-cell">
@@ -289,7 +298,9 @@ export default function AdminDashboard() {
                             <tr className="bg-slate-50 border-b border-slate-200 text-sm text-slate-600 font-medium">
                                 <th className="p-4 pl-6 font-medium">User</th>
                                 <th className="p-4 font-medium hidden md:table-cell">Job Title</th>
-                                <th className="p-4 font-medium hidden sm:table-cell">Sessions</th>
+                                <th className="p-4 font-medium hidden sm:table-cell">Total Sessions</th>
+                                <th className="p-4 font-medium hidden sm:table-cell text-center">Active</th>
+                                <th className="p-4 font-medium hidden sm:table-cell text-center">Deleted</th>
                                 <th className="p-4 font-medium hidden sm:table-cell">Messages</th>
                                 <th className="p-4 font-medium hidden lg:table-cell">Avg Msg/Session</th>
                                 <th className="p-4 font-medium hidden xl:table-cell">Unique Agents</th>
@@ -300,7 +311,7 @@ export default function AdminDashboard() {
                         <tbody className="divide-y divide-slate-100">
                             {users.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="p-8 text-center text-slate-500">
+                                    <td colSpan={10} className="p-8 text-center text-slate-500">
                                         No users found.
                                     </td>
                                 </tr>
@@ -335,6 +346,16 @@ export default function AdminDashboard() {
                                                         {user.totalSessions} 
                                                     </span>
                                                 </div>
+                                            </td>
+                                            <td className="p-4 hidden sm:table-cell text-center">
+                                                <span className={`text-sm ${user.activeSessions > 0 ? 'text-slate-600 font-medium' : 'text-slate-300'}`}>
+                                                    {user.activeSessions}
+                                                </span>
+                                            </td>
+                                            <td className="p-4 hidden sm:table-cell text-center">
+                                                <span className={`text-sm ${user.deletedSessions > 0 ? 'text-red-500 font-medium bg-red-50 px-2 py-1 rounded-md' : 'text-slate-300'}`}>
+                                                    {user.deletedSessions}
+                                                </span>
                                             </td>
                                             <td className="p-4 hidden sm:table-cell">
                                                 <span className={`px-2 py-1 rounded text-xs border font-semibold ${
