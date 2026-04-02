@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { ChevronRight, ArrowLeft, Loader2, User, MessageSquare } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { siteConfig } from '@/config/site';
 
 // Helper to get agent name
@@ -122,8 +124,66 @@ export default function AdminDashboard() {
                                             <p className="text-sm font-medium mb-1 opacity-75">
                                                 {isUser ? selectedUser?.displayName : getAgentName(selectedSession.botId)}
                                             </p>
-                                            <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                                                {msg.content}
+                                            <div className="text-sm leading-relaxed markdown-admin-view">
+                                                <ReactMarkdown
+                                                    remarkPlugins={[remarkGfm]}
+                                                    components={{
+                                                        p: ({ children }) => (
+                                                            <p className="mb-2 last:mb-0 whitespace-pre-wrap">{children}</p>
+                                                        ),
+                                                        table: ({ children }) => (
+                                                            <div className="w-full overflow-x-auto my-4">
+                                                                <table className="w-full text-sm text-left border-collapse border border-slate-300 rounded-lg">
+                                                                    {children}
+                                                                </table>
+                                                            </div>
+                                                        ),
+                                                        thead: ({ children }) => (
+                                                            <thead className="text-xs uppercase text-slate-500 bg-slate-100/50">
+                                                                {children}
+                                                            </thead>
+                                                        ),
+                                                        th: ({ children }) => (
+                                                            <th className="px-4 py-2 font-semibold whitespace-nowrap border-b border-slate-300">{children}</th>
+                                                        ),
+                                                        td: ({ children }) => (
+                                                            <td className="px-4 py-1.5 border-b border-slate-200 last:border-0 whitespace-nowrap">{children}</td>
+                                                        ),
+                                                        ul: ({ children }) => (
+                                                            <ul className="list-disc list-inside mb-2 space-y-1 pl-1">{children}</ul>
+                                                        ),
+                                                        ol: ({ children }) => (
+                                                            <ol className="list-decimal list-inside mb-2 space-y-1 pl-1">{children}</ol>
+                                                        ),
+                                                        li: ({ children }) => (
+                                                            <li>{children}</li>
+                                                        ),
+                                                        strong: ({ children }) => (
+                                                            <strong className="font-semibold">{children}</strong>
+                                                        ),
+                                                        code: ({ children }) => (
+                                                            <code className="bg-slate-200 text-slate-800 rounded px-1 py-0.5 font-mono text-xs">{children}</code>
+                                                        ),
+                                                        pre: ({ children }) => (
+                                                            <pre className="bg-slate-800 text-slate-100 rounded-lg p-4 my-3 overflow-x-auto text-xs font-mono border border-slate-700">{children}</pre>
+                                                        ),
+                                                        h1: ({ children }) => <h1 className="text-base font-bold mb-2 mt-3">{children}</h1>,
+                                                        h2: ({ children }) => <h2 className="text-sm font-bold mb-2 mt-3">{children}</h2>,
+                                                        h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 mt-2">{children}</h3>,
+                                                        a: ({ href, children }) => (
+                                                            <a
+                                                                href={href}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-blue-400 hover:text-blue-300 underline break-words"
+                                                            >
+                                                                {children}
+                                                            </a>
+                                                        ),
+                                                    }}
+                                                >
+                                                    {msg.content}
+                                                </ReactMarkdown>
                                             </div>
                                         </div>
                                     </div>
