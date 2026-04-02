@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+
 import { signIn } from 'next-auth/react';
 import Image from 'next/image';
 import { siteConfig } from '@/config/site';
@@ -9,28 +9,6 @@ const { colors, images, text } = siteConfig;
 const login = text.login;
 
 export default function LoginPage() {
-    const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
-
-    const handlePasswordLogin = async () => {
-        if (!password.trim()) return;
-        setLoading(true);
-        setError('');
-
-        const result = await signIn('credentials', {
-            password,
-            redirect: false,
-            callbackUrl: '/',
-        });
-
-        if (result?.error) {
-            setError(login.errorText);
-            setLoading(false);
-        } else {
-            window.location.href = result?.url || '/';
-        }
-    };
 
     const handleSSOLogin = () => {
         signIn('azure-ad', { callbackUrl: '/' });
@@ -93,42 +71,7 @@ export default function LoginPage() {
                         {login.ssoButton}
                     </button>
 
-                    {/* Divider */}
-                    <div className="w-full flex items-center gap-3">
-                        <div className="flex-1 h-px bg-slate-700" />
-                        <span className="text-xs text-slate-500 font-medium tracking-widest uppercase">{login.divider}</span>
-                        <div className="flex-1 h-px bg-slate-700" />
-                    </div>
 
-                    {/* Password Section */}
-                    <div className="w-full flex flex-col gap-3">
-                        <input
-                            type="password"
-                            value={password}
-                            onChange={(e) => { setPassword(e.target.value); setError(''); }}
-                            onKeyDown={(e) => e.key === 'Enter' && handlePasswordLogin()}
-                            placeholder={login.passwordPlaceholder}
-                            className="w-full bg-slate-950/50 border border-slate-700 text-white placeholder:text-slate-500 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:border-transparent transition-all"
-                            style={{ '--tw-ring-color': colors.brandPrimary } as React.CSSProperties}
-                        />
-
-                        {error && (
-                            <p className="text-red-400 text-xs text-center font-medium bg-red-500/10 border border-red-500/20 rounded-lg py-2 px-3">
-                                {error}
-                            </p>
-                        )}
-
-                        <button
-                            onClick={handlePasswordLogin}
-                            disabled={!password.trim() || loading}
-                            className={`w-full py-3 px-5 rounded-xl text-sm font-semibold transition-all duration-200 border ${password.trim() && !loading
-                                ? 'bg-transparent border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white hover:scale-[1.02] active:scale-[0.98]'
-                                : 'bg-transparent border-slate-800 text-slate-600 cursor-not-allowed'
-                                }`}
-                        >
-                            {loading ? login.loadingText : login.loginButton}
-                        </button>
-                    </div>
 
                     {/* Footer */}
                     <p className="text-slate-500 text-xs text-center">

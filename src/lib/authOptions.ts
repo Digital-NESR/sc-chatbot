@@ -1,6 +1,6 @@
 import NextAuth from 'next-auth';
 import AzureADProvider from 'next-auth/providers/azure-ad';
-import CredentialsProvider from 'next-auth/providers/credentials';
+
 
 import type { NextAuthOptions } from 'next-auth';
 
@@ -11,18 +11,7 @@ export const authOptions: NextAuthOptions = {
             clientSecret: process.env.AZURE_AD_CLIENT_SECRET!,
             tenantId: process.env.AZURE_AD_TENANT_ID!,
         }),
-        CredentialsProvider({
-            name: 'Password',
-            credentials: {
-                password: { label: 'Password', type: 'password' },
-            },
-            async authorize(credentials) {
-                if (credentials?.password === 'nesr2026') {
-                    return { id: '1', name: 'Admin', email: 'admin@nesr.com' };
-                }
-                return null;
-            },
-        }),
+
     ],
     pages: {
         signIn: '/login',
@@ -32,10 +21,6 @@ export const authOptions: NextAuthOptions = {
     },
     callbacks: {
         async jwt({ token, account, user }: any) {
-            // For credentials login, user is passed directly but there's no access_token
-            if (user && !account?.access_token) {
-                token.displayName = user.name;
-            }
 
             // This block only runs on the initial sign-in when the access token is fresh
             if (account?.access_token) {
