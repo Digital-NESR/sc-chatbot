@@ -4,17 +4,20 @@ import { DefaultJWT } from 'next-auth/jwt';
 declare module 'next-auth' {
     interface Session {
         user: {
-            jobTitle?: string;
+            displayName?: string | null;
+            jobTitle?: string | null;
         } & DefaultSession['user'];
     }
 
     interface User extends DefaultUser {
-        jobTitle?: string;
+        displayName?: string | null;
+        jobTitle?: string | null;
     }
 }
 
 declare module 'next-auth/jwt' {
     interface JWT extends DefaultJWT {
-        jobTitle?: string;
+        displayName?: string | null;
+        jobTitle?: string | null;
     }
 }

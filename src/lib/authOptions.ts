@@ -1,6 +1,7 @@
 import NextAuth from 'next-auth';
 import AzureADProvider from 'next-auth/providers/azure-ad';
 import CredentialsProvider from 'next-auth/providers/credentials';
+import { prisma } from '@/lib/prisma';
 
 import type { NextAuthOptions } from 'next-auth';
 
@@ -31,19 +32,26 @@ export const authOptions: NextAuthOptions = {
         strategy: 'jwt',
     },
     callbacks: {
-        async jwt({ token, account }: any) {
+        async jwt({ token, account, user }: any) {
+            // For credentials login, user is passed directly but there's no access_token
+            if (user && !account?.access_token) {
+                token.displayName = user.name;
+            }
+
             // This block only runs on the initial sign-in when the access token is fresh
             if (account?.access_token) {
                 try {
-                    // 1. Fetch the Job Title
-                    const profileResponse = await fetch("https://graph.microsoft.com/v1.0/me?$select=jobTitle", {
+                    // 1. Fetch the Job Title and Display Name
+                    const profileResponse = await fetch("https://graph.microsoft.com/v1.0/me?$select=jobTitle,displayName", {
                         headers: { Authorization: `Bearer ${account.access_token}` },
                     });
                     if (profileResponse.ok) {
                         const profileData = await profileResponse.json();
                         token.jobTitle = profileData.jobTitle || "NESR Employee";
+                        token.displayName = profileData.displayName || token.name || user?.name || "User";
                     } else {
                         token.jobTitle = "NESR Employee";
+                        token.displayName = token.name || user?.name || "User";
                     }
 
                     // 2. Fetch the Profile Picture (Requesting a tiny 48x48 thumbnail to save cookie space)
@@ -66,14 +74,39 @@ export const authOptions: NextAuthOptions = {
                 } catch (error) {
                     console.error("Failed to fetch Graph API data", error);
                     if (!token.jobTitle) token.jobTitle = "NESR Employee";
+                    if (!token.displayName) token.displayName = token.name || user?.name || "User";
                 }
             }
+
+            // 3. Upsert User in DB on Login
+            if (user || account) {
+                try {
+                    if (token.email) {
+                        await prisma.user.upsert({
+                            where: { email: token.email },
+                            update: {
+                                displayName: (token.displayName || token.name || "User") as string,
+                                jobTitle: (token.jobTitle || null) as string | null,
+                            },
+                            create: {
+                                email: token.email,
+                                displayName: (token.displayName || token.name || "User") as string,
+                                jobTitle: (token.jobTitle || null) as string | null,
+                            }
+                        });
+                    }
+                } catch (error) {
+                    console.error("Error upserting user in DB:", error);
+                }
+            }
+
             return token;
         },
         async session({ session, token }: any) {
-            // 3. Pass the fetched data down to the frontend UI session
+            // 4. Pass the fetched data down to the frontend UI session
             if (session.user) {
                 session.user.jobTitle = token.jobTitle as string;
+                session.user.displayName = token.displayName as string || session.user.name;
                 if (token.picture) {
                     session.user.image = token.picture as string;
                 }
