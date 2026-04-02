@@ -19,6 +19,8 @@ export async function GET() {
                 displayName: true,
                 jobTitle: true,
                 botId: true,
+                updatedAt: true,
+                _count: { select: { messages: true } }
             }
         });
 
@@ -31,11 +33,15 @@ export async function GET() {
                     email: s.userId,
                     displayName: s.displayName || 'Unknown',
                     jobTitle: s.jobTitle || 'Unknown',
+                    totalSessions: 0,
+                    totalMessages: 0,
+                    lastActiveDate: new Date(0), // Setup initial epoch
                     agentCounts: {}
                 });
             }
             
             const userData = userMap.get(s.userId);
+            
             if (s.displayName && userData.displayName === 'Unknown') {
                 userData.displayName = s.displayName;
             }
@@ -43,12 +49,36 @@ export async function GET() {
                 userData.jobTitle = s.jobTitle;
             }
 
-            const currentCount = userData.agentCounts[s.botId] || 0;
-            userData.agentCounts[s.botId] = currentCount + 1;
+            userData.totalSessions += 1;
+            userData.totalMessages += s._count.messages;
+
+            // Track last active date
+            const currentUpdatedAt = new Date(s.updatedAt);
+            if (currentUpdatedAt > userData.lastActiveDate) {
+                userData.lastActiveDate = currentUpdatedAt;
+            }
+
+            const currentAgentCount = userData.agentCounts[s.botId] || 0;
+            userData.agentCounts[s.botId] = currentAgentCount + 1;
         }
 
-        const users = Array.from(userMap.values());
-        users.sort((a, b) => a.email.localeCompare(b.email));
+        const users = Array.from(userMap.values()).map(user => {
+            // Compute extra fields
+            user.averageMessagesPerSession = user.totalSessions > 0 
+                ? parseFloat((user.totalMessages / user.totalSessions).toFixed(1)) 
+                : 0;
+            
+            user.uniqueAgentsUsed = Object.keys(user.agentCounts).length;
+
+            const date = user.lastActiveDate.getTime() === 0 ? new Date() : user.lastActiveDate;
+            user.lastActiveDateString = date.toLocaleDateString('en-US', { 
+                month: 'short', day: 'numeric', year: 'numeric' 
+            });
+
+            return user;
+        });
+
+        users.sort((a, b) => b.totalMessages - a.totalMessages);
 
         return NextResponse.json({ users });
     } catch (error) {

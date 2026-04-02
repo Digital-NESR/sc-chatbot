@@ -288,22 +288,27 @@ export default function AdminDashboard() {
                         <thead>
                             <tr className="bg-slate-50 border-b border-slate-200 text-sm text-slate-600 font-medium">
                                 <th className="p-4 pl-6 font-medium">User</th>
-                                <th className="p-4 font-medium hidden sm:table-cell">Job Title</th>
-                                <th className="p-4 font-medium hidden sm:table-cell">Total Sessions</th>
+                                <th className="p-4 font-medium hidden md:table-cell">Job Title</th>
+                                <th className="p-4 font-medium hidden sm:table-cell">Sessions</th>
+                                <th className="p-4 font-medium hidden sm:table-cell">Messages</th>
+                                <th className="p-4 font-medium hidden lg:table-cell">Avg Msg/Session</th>
+                                <th className="p-4 font-medium hidden xl:table-cell">Unique Agents</th>
+                                <th className="p-4 font-medium hidden md:table-cell">Last Active</th>
                                 <th className="p-4 w-10"></th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {users.length === 0 ? (
                                 <tr>
-                                    <td colSpan={4} className="p-8 text-center text-slate-500">
+                                    <td colSpan={8} className="p-8 text-center text-slate-500">
                                         No users found.
                                     </td>
                                 </tr>
                             ) : (
                                 users.map((user) => {
-                                    const totalSessions = Object.values(user.agentCounts).reduce((a: any, b: any) => a + b, 0) as number;
-                                    
+                                    const hasMessages = user.totalMessages > 0;
+                                    const isHighEngagement = user.totalMessages >= 20;
+
                                     return (
                                         <tr 
                                             key={user.email} 
@@ -312,25 +317,42 @@ export default function AdminDashboard() {
                                         >
                                             <td className="p-4 pl-6">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 group-hover:bg-[#307c4c]/10 group-hover:text-[#307c4c] group-hover:border-[#307c4c]/20 transition-colors">
+                                                    <div className={`w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center transition-colors ${hasMessages ? 'text-slate-600 group-hover:bg-[#307c4c]/10 group-hover:text-[#307c4c] group-hover:border-[#307c4c]/20' : 'text-slate-300'}`}>
                                                         <User className="w-5 h-5" />
                                                     </div>
                                                     <div>
-                                                        <p className="font-medium text-slate-800">{user.displayName}</p>
+                                                        <p className={`font-medium ${hasMessages ? 'text-slate-800' : 'text-slate-400'}`}>{user.displayName}</p>
                                                         <p className="text-xs text-slate-500">{user.email}</p>
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td className="p-4 text-slate-600 text-sm hidden sm:table-cell">
+                                            <td className={`p-4 text-sm hidden md:table-cell ${hasMessages ? 'text-slate-600' : 'text-slate-400'}`}>
                                                 {user.jobTitle}
                                             </td>
-                                            <td className="p-4 text-slate-600 hidden sm:table-cell">
+                                            <td className="p-4 hidden sm:table-cell">
                                                 <div className="flex items-center gap-1.5 font-medium">
-                                                    <span className="w-6 h-6 flex items-center justify-center bg-slate-100 rounded text-xs border border-slate-200">
-                                                        {totalSessions}
+                                                    <span className={`px-2 py-1 flex items-center justify-center bg-slate-100 rounded text-xs border border-slate-200 ${hasMessages ? 'text-slate-700' : 'text-slate-400'}`}>
+                                                        {user.totalSessions} 
                                                     </span>
-                                                    <span className="text-xs text-slate-400">Total</span>
                                                 </div>
+                                            </td>
+                                            <td className="p-4 hidden sm:table-cell">
+                                                <span className={`px-2 py-1 rounded text-xs border font-semibold ${
+                                                    isHighEngagement ? 'bg-[#307c4c]/10 border-[#307c4c]/20 text-[#307c4c]' : 
+                                                    hasMessages ? 'bg-blue-50 border-blue-100 text-blue-700' : 
+                                                    'bg-slate-50 border-slate-200 text-slate-400'
+                                                }`}>
+                                                    {user.totalMessages}
+                                                </span>
+                                            </td>
+                                            <td className={`p-4 text-sm hidden lg:table-cell ${hasMessages ? 'text-slate-600' : 'text-slate-400'}`}>
+                                                {user.averageMessagesPerSession}
+                                            </td>
+                                            <td className={`p-4 text-sm hidden xl:table-cell ${hasMessages ? 'text-slate-600' : 'text-slate-400'}`}>
+                                                {user.uniqueAgentsUsed}
+                                            </td>
+                                            <td className={`p-4 text-sm hidden md:table-cell ${hasMessages ? 'text-slate-500' : 'text-slate-300'}`}>
+                                                {user.lastActiveDateString}
                                             </td>
                                             <td className="p-4 pr-6 text-right">
                                                 <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-slate-600 transition-colors" />
