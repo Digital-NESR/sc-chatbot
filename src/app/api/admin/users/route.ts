@@ -13,95 +13,85 @@ export async function GET() {
     }
 
     try {
-        const sessions = await prisma.chatSession.findMany({
-            select: {
-                userId: true,
-                displayName: true,
-                jobTitle: true,
-                botId: true,
-                updatedAt: true,
-                isDeleted: true,
-                _count: { select: { messages: true } }
+        const dbUsers = await prisma.user.findMany({
+            include: {
+                chatSessions: {
+                    select: {
+                        botId: true,
+                        isDeleted: true,
+                        updatedAt: true,
+                        _count: { select: { messages: true } }
+                    }
+                }
             }
         });
 
-        // Group by user
-        const userMap = new Map<string, any>();
+        const usersData: any[] = [];
         
         // Group by date for time-series charts
         const timeSeriesMap = new Map<string, any>();
         let activeTodayCount = 0;
-        
-        // Use local timezone format or a strict UTC split. YYYY-MM-DD
         const todayStr = new Date().toLocaleDateString('en-CA'); // 'YYYY-MM-DD' in local timezone
 
-        for (const s of sessions) {
-            if (!userMap.has(s.userId)) {
-                userMap.set(s.userId, {
-                    email: s.userId,
-                    displayName: s.displayName || 'Unknown',
-                    jobTitle: s.jobTitle || 'Unknown',
-                    totalSessions: 0,
-                    activeSessions: 0,
-                    deletedSessions: 0,
-                    totalMessages: 0,
-                    lastActiveDate: new Date(0), // Setup initial epoch
-                    agentCounts: {}
-                });
-            }
-            
-            const userData = userMap.get(s.userId);
-            
-            if (s.displayName && userData.displayName === 'Unknown') {
-                userData.displayName = s.displayName;
-            }
-            if (s.jobTitle && userData.jobTitle === 'Unknown') {
-                userData.jobTitle = s.jobTitle;
+        for (const u of dbUsers) {
+            const userData = {
+                email: u.email,
+                displayName: u.displayName || 'Unknown',
+                jobTitle: u.jobTitle || 'Unknown',
+                department: u.department || 'General',
+                country: u.country || 'Unknown',
+                employeeId: u.employeeId || '',
+                totalSessions: 0,
+                activeSessions: 0,
+                deletedSessions: 0,
+                totalMessages: 0,
+                lastActiveDate: new Date(0), // Setup initial epoch
+                agentCounts: {} as Record<string, number>
+            };
+
+            for (const s of u.chatSessions) {
+                userData.totalSessions += 1;
+                if (s.isDeleted) {
+                    userData.deletedSessions += 1;
+                } else {
+                    userData.activeSessions += 1;
+                }
+                userData.totalMessages += s._count.messages;
+
+                // Track last active date
+                const currentUpdatedAt = new Date(s.updatedAt);
+                if (currentUpdatedAt > userData.lastActiveDate) {
+                    userData.lastActiveDate = currentUpdatedAt;
+                }
+
+                userData.agentCounts[s.botId] = (userData.agentCounts[s.botId] || 0) + 1;
+                
+                // Build time series data
+                const dateStr = currentUpdatedAt.toLocaleDateString('en-CA'); // 'YYYY-MM-DD'
+                
+                if (dateStr === todayStr) {
+                    activeTodayCount++;
+                }
+
+                if (!timeSeriesMap.has(dateStr)) {
+                    timeSeriesMap.set(dateStr, {
+                        date: dateStr,
+                        totalSessions: 0,
+                        totalMessages: 0,
+                        agents: {} as Record<string, number>
+                    });
+                }
+                
+                const dayData = timeSeriesMap.get(dateStr);
+                dayData.totalSessions += 1;
+                dayData.totalMessages += s._count.messages;
+                dayData.agents[s.botId] = (dayData.agents[s.botId] || 0) + 1;
             }
 
-            userData.totalSessions += 1;
-            if (s.isDeleted) {
-                userData.deletedSessions += 1;
-            } else {
-                userData.activeSessions += 1;
-            }
-            userData.totalMessages += s._count.messages;
-
-            // Track last active date
-            const currentUpdatedAt = new Date(s.updatedAt);
-            if (currentUpdatedAt > userData.lastActiveDate) {
-                userData.lastActiveDate = currentUpdatedAt;
-            }
-
-            const currentAgentCount = userData.agentCounts[s.botId] || 0;
-            userData.agentCounts[s.botId] = currentAgentCount + 1;
-            
-            // Build time series data
-            const sessionDate = new Date(s.updatedAt);
-            const dateStr = sessionDate.toLocaleDateString('en-CA'); // 'YYYY-MM-DD'
-            
-            if (dateStr === todayStr) {
-                activeTodayCount++;
-            }
-
-            if (!timeSeriesMap.has(dateStr)) {
-                timeSeriesMap.set(dateStr, {
-                    date: dateStr,
-                    totalSessions: 0,
-                    totalMessages: 0,
-                    agents: {}
-                });
-            }
-            
-            const dayData = timeSeriesMap.get(dateStr);
-            dayData.totalSessions += 1;
-            dayData.totalMessages += s._count.messages;
-            
-            const dayAgentCount = dayData.agents[s.botId] || 0;
-            dayData.agents[s.botId] = dayAgentCount + 1;
+            usersData.push(userData);
         }
 
-        const users = Array.from(userMap.values()).map(user => {
+        const users = usersData.map(user => {
             // Compute extra fields
             user.averageMessagesPerSession = user.totalSessions > 0 
                 ? parseFloat((user.totalMessages / user.totalSessions).toFixed(1)) 

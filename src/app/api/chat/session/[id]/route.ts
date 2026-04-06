@@ -27,7 +27,7 @@ export async function DELETE(
         const existingSession = await prisma.chatSession.findFirst({
             where: {
                 id,
-                userId: session.user.email,
+                userEmail: session.user.email,
                 isDeleted: false,
             },
         });

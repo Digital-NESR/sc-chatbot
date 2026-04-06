@@ -30,11 +30,9 @@ export async function POST(request: Request) {
             const newTitle = generateTitle(content);
             const chatSession = await prisma.chatSession.create({
                 data: {
-                    userId: session.user.email,
+                    userEmail: session.user.email,
                     botId: botId,
                     title: newTitle,
-                    displayName: session.user.displayName,
-                    jobTitle: session.user.jobTitle,
                 },
             });
             currentSessionId = chatSession.id;
@@ -42,7 +40,7 @@ export async function POST(request: Request) {
             const existingSession = await prisma.chatSession.findFirst({
                 where: {
                     id: currentSessionId,
-                    userId: session.user.email
+                    userEmail: session.user.email
                 }
             });
             if (!existingSession) {

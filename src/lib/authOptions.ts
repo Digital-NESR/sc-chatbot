@@ -3,6 +3,7 @@ import AzureADProvider from 'next-auth/providers/azure-ad';
 
 
 import type { NextAuthOptions } from 'next-auth';
+import { prisma } from '@/lib/prisma';
 
 export const authOptions: NextAuthOptions = {
     providers: [
@@ -25,17 +26,23 @@ export const authOptions: NextAuthOptions = {
             // This block only runs on the initial sign-in when the access token is fresh
             if (account?.access_token) {
                 try {
-                    // 1. Fetch the Job Title and Display Name
-                    const profileResponse = await fetch("https://graph.microsoft.com/v1.0/me?$select=jobTitle,displayName", {
+                    // 1. Fetch the Job Title, Display Name, Department, Country, and EmployeeID
+                    const profileResponse = await fetch("https://graph.microsoft.com/v1.0/me?$select=jobTitle,displayName,department,country,employeeId", {
                         headers: { Authorization: `Bearer ${account.access_token}` },
                     });
                     if (profileResponse.ok) {
                         const profileData = await profileResponse.json();
                         token.jobTitle = profileData.jobTitle || "NESR Employee";
                         token.displayName = profileData.displayName || token.name || user?.name || "User";
+                        token.department = profileData.department || "General";
+                        token.country = profileData.country || "Unknown Location";
+                        token.employeeId = profileData.employeeId || "";
                     } else {
                         token.jobTitle = "NESR Employee";
                         token.displayName = token.name || user?.name || "User";
+                        token.department = "General";
+                        token.country = "Unknown Location";
+                        token.employeeId = "";
                     }
 
                     // 2. Fetch the Profile Picture (Requesting a tiny 48x48 thumbnail to save cookie space)
@@ -59,6 +66,36 @@ export const authOptions: NextAuthOptions = {
                     console.error("Failed to fetch Graph API data", error);
                     if (!token.jobTitle) token.jobTitle = "NESR Employee";
                     if (!token.displayName) token.displayName = token.name || user?.name || "User";
+                    if (!token.department) token.department = "General";
+                    if (!token.country) token.country = "Unknown Location";
+                    if (!token.employeeId) token.employeeId = "";
+                }
+
+                // 3. Upsert User into normalized DB 
+                try {
+                    const userEmail = user?.email || token?.email;
+                    if (userEmail) {
+                        await prisma.user.upsert({
+                            where: { email: userEmail },
+                            update: {
+                                displayName: token.displayName as string,
+                                jobTitle: token.jobTitle as string,
+                                department: token.department as string,
+                                country: token.country as string,
+                                employeeId: token.employeeId as string,
+                            },
+                            create: {
+                                email: userEmail,
+                                displayName: token.displayName as string,
+                                jobTitle: token.jobTitle as string,
+                                department: token.department as string,
+                                country: token.country as string,
+                                employeeId: token.employeeId as string,
+                            }
+                        });
+                    }
+                } catch (error) {
+                    console.error("Failed to upsert user to database", error);
                 }
             }
 

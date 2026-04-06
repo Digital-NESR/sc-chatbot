@@ -15,7 +15,7 @@ export async function GET() {
     try {
         const chatSessions = await prisma.chatSession.findMany({
             where: {
-                userId: session.user.email,
+                userEmail: session.user.email,
                 isDeleted: false,
             },
             orderBy: {

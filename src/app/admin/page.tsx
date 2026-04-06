@@ -20,6 +20,8 @@ export default function AdminDashboard() {
     const [loadingUsers, setLoadingUsers] = useState(true);
 
     const [selectedJobTitle, setSelectedJobTitle] = useState<string>('');
+    const [selectedDepartment, setSelectedDepartment] = useState<string>('');
+    const [selectedCountry, setSelectedCountry] = useState<string>('');
     const [selectedAgentFilter, setSelectedAgentFilter] = useState<string>('');
     const [chartMode, setChartMode] = useState<'combined' | 'agent'>('combined');
 
@@ -57,7 +59,7 @@ export default function AdminDashboard() {
         const fetchSessions = async () => {
             setLoadingSessions(true);
             try {
-                const res = await fetch(`/api/admin/sessions?userId=${encodeURIComponent(selectedUser.email)}`);
+                const res = await fetch(`/api/admin/sessions?userEmail=${encodeURIComponent(selectedUser.email)}`);
                 if (res.ok) {
                     const data = await res.json();
                     setSessions(data.sessions);
@@ -298,6 +300,16 @@ export default function AdminDashboard() {
         return Array.from(titles).filter(Boolean).sort();
     }, [users]);
 
+    const uniqueDepartments = useMemo(() => {
+        const depts = new Set(users.map(u => u.department));
+        return Array.from(depts).filter(Boolean).sort();
+    }, [users]);
+
+    const uniqueCountries = useMemo(() => {
+        const countries = new Set(users.map(u => u.country));
+        return Array.from(countries).filter(Boolean).sort();
+    }, [users]);
+
     const uniqueAgents = useMemo(() => {
         return siteConfig.agents.map(a => ({ id: a.id, name: a.name }));
     }, []);
@@ -305,10 +317,12 @@ export default function AdminDashboard() {
     const filteredUsers = useMemo(() => {
         return users.filter(u => {
             if (selectedJobTitle && u.jobTitle !== selectedJobTitle) return false;
+            if (selectedDepartment && u.department !== selectedDepartment) return false;
+            if (selectedCountry && u.country !== selectedCountry) return false;
             if (selectedAgentFilter && !u.agentCounts[selectedAgentFilter]) return false;
             return true;
         });
-    }, [users, selectedJobTitle, selectedAgentFilter]);
+    }, [users, selectedJobTitle, selectedDepartment, selectedCountry, selectedAgentFilter]);
 
     const chartColors = ['#e11d48', '#0284c7', '#d97706', '#7c3aed', '#10b981', '#f43f5e', '#3b82f6'];
 
@@ -410,7 +424,7 @@ export default function AdminDashboard() {
                     </div>
                     
                     {/* Slicers */}
-                    <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="flex flex-wrap sm:flex-nowrap gap-3">
                         <select 
                             value={selectedJobTitle}
                             onChange={(e) => setSelectedJobTitle(e.target.value)}
@@ -419,6 +433,26 @@ export default function AdminDashboard() {
                             <option value="">All Job Titles</option>
                             {uniqueJobTitles.map((title: any) => (
                                 <option key={title} value={title}>{title}</option>
+                            ))}
+                        </select>
+                        <select 
+                            value={selectedDepartment}
+                            onChange={(e) => setSelectedDepartment(e.target.value)}
+                            className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-[#307c4c] focus:border-[#307c4c] block w-full p-2.5"
+                        >
+                            <option value="">All Departments</option>
+                            {uniqueDepartments.map((dept: any) => (
+                                <option key={dept} value={dept}>{dept}</option>
+                            ))}
+                        </select>
+                        <select 
+                            value={selectedCountry}
+                            onChange={(e) => setSelectedCountry(e.target.value)}
+                            className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-[#307c4c] focus:border-[#307c4c] block w-full p-2.5"
+                        >
+                            <option value="">All Countries</option>
+                            {uniqueCountries.map((country: any) => (
+                                <option key={country} value={country}>{country}</option>
                             ))}
                         </select>
                         <select 
@@ -445,7 +479,9 @@ export default function AdminDashboard() {
                                 <tr className="bg-slate-50 border-b border-slate-200 text-sm text-slate-600 font-medium">
                                     <th className="p-4 pl-6 font-medium">User</th>
                                     <th className="p-4 font-medium hidden md:table-cell">Job Title</th>
-                                    <th className="p-4 font-medium hidden sm:table-cell">Total Sessions</th>
+                                    <th className="p-4 font-medium hidden lg:table-cell">Department</th>
+                                    <th className="p-4 font-medium hidden 2xl:table-cell text-center">Country</th>
+                                    <th className="p-4 font-medium hidden sm:table-cell">Sessions</th>
                                     <th className="p-4 font-medium hidden sm:table-cell text-center">Active</th>
                                     <th className="p-4 font-medium hidden sm:table-cell text-center">Deleted</th>
                                     <th className="p-4 font-medium hidden sm:table-cell">Messages</th>
@@ -486,6 +522,12 @@ export default function AdminDashboard() {
                                             </td>
                                             <td className={`p-4 text-sm hidden md:table-cell ${hasMessages ? 'text-slate-600' : 'text-slate-400'}`}>
                                                 {user.jobTitle}
+                                            </td>
+                                            <td className={`p-4 text-sm hidden lg:table-cell ${hasMessages ? 'text-slate-600' : 'text-slate-400'}`}>
+                                                {user.department}
+                                            </td>
+                                            <td className={`p-4 text-sm hidden 2xl:table-cell text-center ${hasMessages ? 'text-slate-600' : 'text-slate-400'}`}>
+                                                {user.country}
                                             </td>
                                             <td className="p-4 hidden sm:table-cell">
                                                 <div className="flex items-center gap-1.5 font-medium">
