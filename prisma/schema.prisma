@@ -21,7 +21,7 @@ model User {
 
 model ChatSession {
   id          String    @id @default(cuid())
-  userEmail   String
+  userEmail   String    @default("")
   user        User      @relation(fields: [userEmail], references: [email], onDelete: Cascade)
   botId       String
   title       String    @default("New Conversation")
