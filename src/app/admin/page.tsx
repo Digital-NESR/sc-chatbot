@@ -93,6 +93,43 @@ export default function AdminDashboard() {
         fetchMessages();
     }, [selectedSession]);
 
+    // --- Derived UI State (ALL HOOKS MUST BE ABOVE EARLY RETURNS) ---
+    const totalUsers = users.length;
+    const totalSessions = useMemo(() => users.reduce((acc, u) => acc + u.totalSessions, 0), [users]);
+    const totalMessages = useMemo(() => users.reduce((acc, u) => acc + u.totalMessages, 0), [users]);
+
+    const uniqueJobTitles = useMemo(() => {
+        const titles = new Set(users.map(u => u.jobTitle));
+        return Array.from(titles).filter(Boolean).sort();
+    }, [users]);
+
+    const uniqueDepartments = useMemo(() => {
+        const depts = new Set(users.map(u => u.department));
+        return Array.from(depts).filter(Boolean).sort();
+    }, [users]);
+
+    const uniqueCountries = useMemo(() => {
+        const countries = new Set(users.map(u => u.country));
+        return Array.from(countries).filter(Boolean).sort();
+    }, [users]);
+
+    const uniqueAgents = useMemo(() => {
+        return siteConfig.agents.map(a => ({ id: a.id, name: a.name }));
+    }, []);
+
+    const filteredUsers = useMemo(() => {
+        return users.filter(u => {
+            if (selectedJobTitle && u.jobTitle !== selectedJobTitle) return false;
+            if (selectedDepartment && u.department !== selectedDepartment) return false;
+            if (selectedCountry && u.country !== selectedCountry) return false;
+            if (selectedAgentFilter && !u.agentCounts[selectedAgentFilter]) return false;
+            return true;
+        });
+    }, [users, selectedJobTitle, selectedDepartment, selectedCountry, selectedAgentFilter]);
+
+    const chartColors = ['#e11d48', '#0284c7', '#d97706', '#7c3aed', '#10b981', '#f43f5e', '#3b82f6'];
+    // -----------------------------------------------------------------
+
     // Level 3: Transcript View
     if (selectedSession) {
         return (
@@ -289,42 +326,6 @@ export default function AdminDashboard() {
             </div>
         );
     }
-
-    // Derived UI State
-    const totalUsers = users.length;
-    const totalSessions = useMemo(() => users.reduce((acc, u) => acc + u.totalSessions, 0), [users]);
-    const totalMessages = useMemo(() => users.reduce((acc, u) => acc + u.totalMessages, 0), [users]);
-
-    const uniqueJobTitles = useMemo(() => {
-        const titles = new Set(users.map(u => u.jobTitle));
-        return Array.from(titles).filter(Boolean).sort();
-    }, [users]);
-
-    const uniqueDepartments = useMemo(() => {
-        const depts = new Set(users.map(u => u.department));
-        return Array.from(depts).filter(Boolean).sort();
-    }, [users]);
-
-    const uniqueCountries = useMemo(() => {
-        const countries = new Set(users.map(u => u.country));
-        return Array.from(countries).filter(Boolean).sort();
-    }, [users]);
-
-    const uniqueAgents = useMemo(() => {
-        return siteConfig.agents.map(a => ({ id: a.id, name: a.name }));
-    }, []);
-
-    const filteredUsers = useMemo(() => {
-        return users.filter(u => {
-            if (selectedJobTitle && u.jobTitle !== selectedJobTitle) return false;
-            if (selectedDepartment && u.department !== selectedDepartment) return false;
-            if (selectedCountry && u.country !== selectedCountry) return false;
-            if (selectedAgentFilter && !u.agentCounts[selectedAgentFilter]) return false;
-            return true;
-        });
-    }, [users, selectedJobTitle, selectedDepartment, selectedCountry, selectedAgentFilter]);
-
-    const chartColors = ['#e11d48', '#0284c7', '#d97706', '#7c3aed', '#10b981', '#f43f5e', '#3b82f6'];
 
     // Level 1: Users View
     return (
