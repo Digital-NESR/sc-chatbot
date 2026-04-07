@@ -33,21 +33,26 @@ The complete ecosystem of the application leverages:
 
 ---
 
-## 3. System Architecture & Data Flow
+### 3. System Architecture & Data Flow
 
-### Data Lifecycle
-1. **User Request**: The user logs in via SSO. The NextAuth `jwt` callback upserts the user profile into the Postgres `User` table.
-2. **Chat Session Initialization**: The user selects an Agent (e.g., `sourceguide`). A new `ChatSession` relation is created in the database.
-3. **Message Dispatch**: The user submits input. The `/api/chat/message` API proxies this HTTP POST command to the specific n8n Webhook URL mapped to that agent.
-4. **n8n Processing (AI Synthesis)**: n8n acts as the "brain". It intercepts the prompt, figures out if it needs to trigger a DAX script against PowerBI, query an internal vector database for PDFs, or respond directly.
-5. **UI Rendering**: n8n returns standard Markdown strings back to Next.js API, mapping it to standard React UI chunks via `react-markdown`.
+**Core Architecture Overview**
+The system operates on a decoupled architecture where **Next.js** handles the frontend UI, authentication, and database state, while **n8n** acts as an independent, headless AI orchestration engine. They communicate strictly via HTTP Webhooks. 
 
-`[INSERT_SYSTEM_ARCHITECTURE_DIAGRAM_HERE]`
+**Data Lifecycle & System Interaction**
 
-### Admin Dashboard Routing Logic
-- **Path**: `/admin`
-- **Protection**: NextAuth session validation intercepts unauthenticated calls. Furthermore, an explicit configuration array `process.env.ADMIN_EMAILS` governs authorization. 
-- **Enforcement**: If a logged-in user hits `/admin` or `/api/admin/...` but their email is not present inside `ADMIN_EMAILS` (comma-separated string), Next.js immediately kicks back a `403 Forbidden` Server Response or forces a hard redirect to `/`.
+1. **Authentication & User DB Sync (Next.js -> Neon Postgres):** The user logs in via SSO. The NextAuth `jwt` and `session` callbacks intercept the login payload and perform a Prisma `upsert` operation against the **Neon Postgres Database**. This ensures the `User` table is always up to date with the latest SSO attributes (email, displayName, jobTitle, department, country, employeeId).
+2. **Session Initialization & Persistence (Next.js -> Neon Postgres):** When a user selects an AI Agent (e.g., `sourceguide`), Next.js creates a new `ChatSession` record in the Neon Postgres database via Prisma, establishing a relational link to the `User` via their email.
+3. **Webhook Dispatch (Next.js API -> n8n):** When the user submits a prompt, the Next.js backend route handler (`/api/chat/...`) intercepts it. It saves the user's message to the database, constructs a JSON payload containing the prompt and necessary context, and fires an **HTTP POST request to a dedicated n8n Webhook URL** mapped specifically to that agent. Next.js then awaits the response.
+4. **Agentic Orchestration (n8n -> External APIs):** n8n intercepts the webhook. It acts as the "brain," routing the prompt to the appropriate LLM (OpenAI/Gemini). The LLM determines if it needs to use external tools. If required, n8n executes these tools via HTTP Request nodes—for example, sending dynamically generated DAX queries to the **Power BI API**, or querying a vector database (like Pinecone) for PDF knowledge retrieval.
+5. **Response Delivery (n8n -> Next.js API -> Frontend):** Once n8n synthesizes the final response, it concludes the webhook workflow by returning a standard Markdown string as the HTTP response payload back to the waiting Next.js API. Next.js saves this AI response to the Neon Postgres database and forwards it to the client, where it is mapped to UI components via `react-markdown` (including rendering custom Markdown tables).
+
+![System Architecture Diagram](C:\Users\MohammedFarhan\Downloads\chat\sc-chatbot\public\ArchDiagram.png)
+
+**Admin Dashboard Routing & Protection Logic**
+
+* **Path:** `/admin` and `/api/admin/...`
+* **Protection:** NextAuth session validation intercepts unauthenticated calls. Furthermore, an explicit configuration array via the `ADMIN_EMAILS` environment variable governs strict authorization.
+* **Enforcement:** If a logged-in user attempts to access the Admin UI or trigger an Admin API route, the system checks their email against the parsed `ADMIN_EMAILS` array. If their email is missing, Next.js immediately kicks back a `403 Forbidden` Server Response on the API side, or forces a hard redirect to the home page (`/`) on the client side. This ensures usage metrics and chat histories are completely locked down.
 
 ---
 
