@@ -46,7 +46,7 @@ The system operates on a decoupled architecture where **Next.js** handles the fr
 4. **Agentic Orchestration (n8n -> External APIs):** n8n intercepts the webhook. It acts as the "brain," routing the prompt to the appropriate LLM (OpenAI/Gemini). The LLM determines if it needs to use external tools. If required, n8n executes these tools via HTTP Request nodes—for example, sending dynamically generated DAX queries to the **Power BI API**, or querying a vector database (like Pinecone) for PDF knowledge retrieval.
 5. **Response Delivery (n8n -> Next.js API -> Frontend):** Once n8n synthesizes the final response, it concludes the webhook workflow by returning a standard Markdown string as the HTTP response payload back to the waiting Next.js API. Next.js saves this AI response to the Neon Postgres database and forwards it to the client, where it is mapped to UI components via `react-markdown` (including rendering custom Markdown tables).
 
-![System Architecture Diagram](C:\Users\MohammedFarhan\Downloads\chat\sc-chatbot\public\ArchDiagram.png)
+![System Architecture Diagram](public/ArchDiagram.png)
 
 **Admin Dashboard Routing & Protection Logic**
 
