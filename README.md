@@ -179,4 +179,9 @@ NEXT_PUBLIC_SOURCEGUIDE_WEBHOOK="https://.../webhook/sourceguide"
 
 ---
 
+👉 **[View our complete UI & Design Guidelines here](UI_GUIDELINES.md)**
+
+---
+
+
 *(End of Technical Specifications for Supply Chain AI)*
