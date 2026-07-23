@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
-import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2 } from 'lucide-react';
+import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
@@ -456,6 +456,20 @@ export default function Home() {
             </div>
             <h1 className="text-lg font-bold text-gray-900 tracking-tight">{text.sidebarTitle}</h1>
           </div>
+        </div>
+
+        {/* All Tools Button */}
+        <div className="px-4">
+          <a
+            href="https://scagents.nesr.com"
+            className="w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-900 group"
+          >
+            <LayoutGrid
+              size={20}
+              className="text-gray-400 group-hover:text-gray-600 transition-colors"
+            />
+            <span>All Tools</span>
+          </a>
         </div>
 
         {/* Agent List */}
