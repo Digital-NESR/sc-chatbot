@@ -60,8 +60,8 @@ function AssistantBubble({ content }: { content: string }) {
             <p className="mb-1.5 last:mb-0 whitespace-pre-wrap">{children}</p>
           ),
           table: ({ children }) => (
-            <div className="w-full overflow-x-auto my-3">
-              <table className="w-full text-sm text-left border-collapse border border-slate-300 rounded-lg">
+            <div className="w-full overflow-x-auto my-3 rounded-lg border border-slate-300">
+              <table className="w-full text-[13px] text-left border-collapse">
                 {children}
               </table>
             </div>
@@ -75,7 +75,7 @@ function AssistantBubble({ content }: { content: string }) {
             <th className="px-3 py-1.5 font-semibold whitespace-nowrap border-b border-slate-300">{children}</th>
           ),
           td: ({ children }) => (
-            <td className="px-3 py-1.5 border-b border-slate-200 last:border-0 whitespace-nowrap">{children}</td>
+            <td className="px-3 py-2 border-b border-slate-200 last:border-0 align-top break-words">{children}</td>
           ),
           ul: ({ children }) => (
             <ul className="list-disc list-inside mb-1.5 space-y-0.5 pl-1">{children}</ul>
@@ -662,13 +662,13 @@ export default function Home() {
             </div>
           ) : (
             /* Message List */
-            <div className="max-w-3xl lg:max-w-5xl mx-auto flex flex-col gap-4 pt-8">
+            <div className="max-w-3xl lg:max-w-6xl xl:max-w-7xl mx-auto flex flex-col gap-4 pt-8">
               {messages.map((msg) => (
                 <div
                   key={msg.id}
                   className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
-                  <div className="flex flex-col gap-0.5 max-w-[85%] lg:max-w-[90%]">
+                  <div className={`flex flex-col gap-0.5 ${msg.role === 'user' ? 'max-w-[85%] lg:max-w-[70%]' : 'max-w-[92%] lg:max-w-full'}`}>
                     {/* Name label for clarity */}
                     <span className={`text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-1 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
                       {msg.role === 'user' ? text.youLabel : activeAgentName}
@@ -734,7 +734,7 @@ export default function Home() {
 
         {/* Input Area */}
         <div className="absolute bottom-0 left-0 right-0 p-6 pt-0 pointer-events-none bg-gradient-to-t from-white via-white/80 to-transparent z-20">
-          <div className="max-w-[700px] lg:max-w-5xl mx-auto pointer-events-auto mt-4">
+          <div className="max-w-[700px] lg:max-w-6xl xl:max-w-7xl mx-auto pointer-events-auto mt-4">
             <div className="relative shadow-[0_8px_40px_rgb(0,0,0,0.08)] hover:shadow-[0_8px_40px_rgb(0,0,0,0.12)] transition-shadow duration-300 rounded-2xl bg-white/90 backdrop-blur-xl ring-1 ring-gray-200 group focus-within:ring-2 focus-within:ring-nesr-green/20">
 
 
