@@ -45,7 +45,7 @@ function AssistantBubble({ content }: { content: string }) {
 
   return (
     <div
-      className="relative p-4 text-sm leading-relaxed shadow-sm transition-all duration-200 hover:shadow-md rounded-2xl rounded-tl-sm"
+      className="relative px-4 py-3 text-[13.5px] leading-[1.6] transition-colors duration-200 rounded-xl rounded-tl-md"
       style={{
         backgroundColor: colors.assistantBubbleBg,
         border: `1px solid ${colors.assistantBubbleBorder}`,
@@ -57,10 +57,10 @@ function AssistantBubble({ content }: { content: string }) {
         remarkPlugins={[remarkGfm]}
         components={{
           p: ({ children }) => (
-            <p className="mb-2 last:mb-0 whitespace-pre-wrap">{children}</p>
+            <p className="mb-1.5 last:mb-0 whitespace-pre-wrap">{children}</p>
           ),
           table: ({ children }) => (
-            <div className="w-full overflow-x-auto my-4">
+            <div className="w-full overflow-x-auto my-3">
               <table className="w-full text-sm text-left border-collapse border border-slate-300 rounded-lg">
                 {children}
               </table>
@@ -72,16 +72,16 @@ function AssistantBubble({ content }: { content: string }) {
             </thead>
           ),
           th: ({ children }) => (
-            <th className="px-4 py-2 font-semibold whitespace-nowrap border-b border-slate-300">{children}</th>
+            <th className="px-3 py-1.5 font-semibold whitespace-nowrap border-b border-slate-300">{children}</th>
           ),
           td: ({ children }) => (
-            <td className="px-4 py-1.5 border-b border-slate-200 last:border-0 whitespace-nowrap">{children}</td>
+            <td className="px-3 py-1.5 border-b border-slate-200 last:border-0 whitespace-nowrap">{children}</td>
           ),
           ul: ({ children }) => (
-            <ul className="list-disc list-inside mb-2 space-y-1 pl-1">{children}</ul>
+            <ul className="list-disc list-inside mb-1.5 space-y-0.5 pl-1">{children}</ul>
           ),
           ol: ({ children }) => (
-            <ol className="list-decimal list-inside mb-2 space-y-1 pl-1">{children}</ol>
+            <ol className="list-decimal list-inside mb-1.5 space-y-0.5 pl-1">{children}</ol>
           ),
           li: ({ children }) => (
             <li>{children}</li>
@@ -93,11 +93,11 @@ function AssistantBubble({ content }: { content: string }) {
             <code className="bg-slate-200 text-slate-800 rounded px-1 py-0.5 font-mono text-xs">{children}</code>
           ),
           pre: ({ children }) => (
-            <pre className="bg-slate-800 text-slate-100 rounded-lg p-4 my-3 overflow-x-auto text-xs font-mono border border-slate-700">{children}</pre>
+            <pre className="bg-slate-800 text-slate-100 rounded-lg p-3 my-2 overflow-x-auto text-xs font-mono border border-slate-700">{children}</pre>
           ),
-          h1: ({ children }) => <h1 className="text-base font-bold mb-2 mt-3 text-black">{children}</h1>,
-          h2: ({ children }) => <h2 className="text-sm font-bold mb-2 mt-3 text-black">{children}</h2>,
-          h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 mt-2 text-slate-800">{children}</h3>,
+          h1: ({ children }) => <h1 className="text-base font-bold mb-1.5 mt-2 text-black">{children}</h1>,
+          h2: ({ children }) => <h2 className="text-sm font-bold mb-1.5 mt-2 text-black">{children}</h2>,
+          h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 mt-1.5 text-slate-800">{children}</h3>,
           a: ({ href, children }) => (
             <a
               href={href}
@@ -114,17 +114,17 @@ function AssistantBubble({ content }: { content: string }) {
       </ReactMarkdown>
 
       {/* ── Action Bar ── */}
-      <div className="flex items-center justify-end gap-1 mt-3 pt-2 border-t border-slate-200">
+      <div className="flex items-center justify-end gap-0.5 -mr-1 mt-1.5 opacity-60 hover:opacity-100 transition-opacity duration-200">
         {/* Copy */}
         <button
           onClick={handleCopy}
           aria-label="Copy message"
-          className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 transition-colors duration-150"
+          className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors duration-150"
         >
           {copied ? (
-            <Check size={16} className="text-emerald-500" />
+            <Check size={14} className="text-emerald-500" />
           ) : (
-            <Copy size={16} />
+            <Copy size={14} />
           )}
         </button>
 
@@ -132,24 +132,24 @@ function AssistantBubble({ content }: { content: string }) {
         <button
           onClick={() => toggleFeedback('up')}
           aria-label="Thumbs up"
-          className={`p-1.5 rounded-md transition-colors duration-150 ${feedback === 'up'
+          className={`p-1 rounded-md transition-colors duration-150 ${feedback === 'up'
               ? 'text-emerald-500 bg-emerald-50'
               : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200/50'
             }`}
         >
-          <ThumbsUp size={16} fill={feedback === 'up' ? 'currentColor' : 'none'} />
+          <ThumbsUp size={14} fill={feedback === 'up' ? 'currentColor' : 'none'} />
         </button>
 
         {/* Thumbs Down */}
         <button
           onClick={() => toggleFeedback('down')}
           aria-label="Thumbs down"
-          className={`p-1.5 rounded-md transition-colors duration-150 ${feedback === 'down'
+          className={`p-1 rounded-md transition-colors duration-150 ${feedback === 'down'
               ? 'text-red-400 bg-red-50'
               : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200/50'
             }`}
         >
-          <ThumbsDown size={16} fill={feedback === 'down' ? 'currentColor' : 'none'} />
+          <ThumbsDown size={14} fill={feedback === 'down' ? 'currentColor' : 'none'} />
         </button>
       </div>
     </div>
@@ -662,13 +662,13 @@ export default function Home() {
             </div>
           ) : (
             /* Message List */
-            <div className="max-w-3xl lg:max-w-5xl mx-auto flex flex-col gap-6 pt-8">
+            <div className="max-w-3xl lg:max-w-5xl mx-auto flex flex-col gap-4 pt-8">
               {messages.map((msg) => (
                 <div
                   key={msg.id}
                   className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
-                  <div className="flex flex-col gap-1 max-w-[85%] lg:max-w-[90%]">
+                  <div className="flex flex-col gap-0.5 max-w-[85%] lg:max-w-[90%]">
                     {/* Name label for clarity */}
                     <span className={`text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-1 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
                       {msg.role === 'user' ? text.youLabel : activeAgentName}
@@ -676,13 +676,13 @@ export default function Home() {
 
                     {msg.role === 'user' ? (
                       <div
-                        className="relative p-4 text-sm leading-relaxed shadow-sm transition-all duration-200 hover:shadow-md bg-nesr-green text-white rounded-2xl rounded-tr-sm shadow-nesr-green/20"
+                        className="relative px-4 py-2.5 text-[13.5px] leading-[1.6] bg-nesr-green text-white rounded-xl rounded-tr-md"
                       >
                         <span className="whitespace-pre-wrap">{msg.content}</span>
                       </div>
                     ) : msg.role === 'system' ? (
                       <div
-                        className="relative p-4 text-sm leading-relaxed shadow-sm transition-all duration-200 hover:shadow-md bg-red-50 text-red-600 rounded-xl border border-red-100"
+                        className="relative px-4 py-2.5 text-[13.5px] leading-[1.6] bg-red-50 text-red-600 rounded-xl border border-red-100"
                       >
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
@@ -713,7 +713,7 @@ export default function Home() {
               {isLoading && (
                 <div className="flex w-full justify-start mt-2">
                   <div
-                    className="rounded-2xl rounded-tl-sm px-6 py-4 flex items-center gap-2 shadow-sm"
+                    className="rounded-xl rounded-tl-md px-4 py-3 flex items-center gap-1.5"
                     style={{
                       backgroundColor: colors.assistantBubbleBg,
                       border: `1px solid ${colors.assistantBubbleBorder}`,
