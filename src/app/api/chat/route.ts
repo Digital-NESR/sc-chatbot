@@ -9,8 +9,10 @@ const insecureAgent = new https.Agent({ rejectUnauthorized: false });
 /**
  * Makes an HTTP/HTTPS POST request using Node's native modules,
  * bypassing the Next.js fetch wrapper which can't use a custom SSL agent.
+ * Resolves with the status code alongside the body so the caller can tell a
+ * real agent reply apart from an n8n error page.
  */
-function makeRequest(url: string, body: string): Promise<string> {
+function makeRequest(url: string, body: string): Promise<{ status: number; body: string }> {
     return new Promise((resolve, reject) => {
         const parsed = new URL(url);
         const isHttps = parsed.protocol === 'https:';
@@ -30,7 +32,7 @@ function makeRequest(url: string, body: string): Promise<string> {
         const req = (isHttps ? https : http).request(options, (res) => {
             let data = '';
             res.on('data', (chunk) => (data += chunk));
-            res.on('end', () => resolve(data));
+            res.on('end', () => resolve({ status: res.statusCode ?? 0, body: data }));
         });
 
         req.on('error', reject);
@@ -67,7 +69,22 @@ export async function POST(request: Request) {
         }
 
         const requestBody = JSON.stringify({ message, agent, sessionId });
-        const responseText = await makeRequest(webhookUrl, requestBody);
+        const { status, body: responseText } = await makeRequest(webhookUrl, requestBody);
+
+        // n8n answers with a non-2xx JSON body for its own failures (inactive
+        // workflow, unregistered webhook, node error). Without this check those
+        // bodies were forwarded as 200 and rendered to the user as if the agent
+        // had said them.
+        if (status < 200 || status >= 300) {
+            console.error(
+                `[/api/chat] Agent "${agent}" webhook returned ${status}:`,
+                responseText.slice(0, 500)
+            );
+            return NextResponse.json(
+                { error: 'Agent request failed', status },
+                { status: 502 }
+            );
+        }
 
         let data;
         try {

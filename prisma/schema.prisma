@@ -22,7 +22,9 @@ model User {
 model ChatSession {
   id          String    @id @default(cuid())
   userEmail   String    @default("")
-  user        User      @relation(fields: [userEmail], references: [email], onDelete: Cascade)
+  // Restrict, not Cascade: deleting a User must never take their chat history
+  // with it. Sessions are only ever soft-deleted via the isDeleted flag.
+  user        User      @relation(fields: [userEmail], references: [email], onDelete: Restrict)
   botId       String
   title       String    @default("New Conversation")
   createdAt   DateTime  @default(now())

@@ -74,7 +74,7 @@ model User {
 model ChatSession {
   id          String    @id @default(cuid())
   userEmail   String    @default("") // Foreign Key bridging relation to User Table
-  user        User      @relation(fields: [userEmail], references: [email], onDelete: Cascade)
+  user        User      @relation(fields: [userEmail], references: [email], onDelete: Restrict)
   botId       String    // Matches Agent ID inside siteConfig.ts
   title       String    @default("New Conversation")
   createdAt   DateTime  @default(now())
