@@ -27,7 +27,7 @@ interface ChatSessionMeta {
 }
 
 /* ── Rotating status line shown while an agent is working ── */
-const THINKING_WORD_MS = 5000;
+const THINKING_WORD_MS = 3000;
 
 function ThinkingIndicator() {
   // null until the first word is picked, so the dots render immediately and
