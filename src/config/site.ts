@@ -1,4 +1,4 @@
-import { Package, Truck, Search, type LucideIcon } from 'lucide-react';
+import { Package, Truck, Search, PackageSearch, type LucideIcon } from 'lucide-react';
 
 /* ─────────────────────────────────────────────
    SINGLE SOURCE OF TRUTH
@@ -101,6 +101,11 @@ export const siteConfig = {
             'Who supplies Medical Insurance in Egypt?',
             'Check vendor details for Barite in UAE',
         ],
+        trackrequest: [
+            'What is the status of my request: ',
+            'Where is the shipment for PO: ',
+            'Show me all my pending requests',
+        ],
     },
 
     /* ── Agents ── */
@@ -131,6 +136,15 @@ export const siteConfig = {
             tagline: 'I can help you find approved suppliers and check vendor details.',
             disclaimer: 'Always confirm vendor status with procurement',
             webhookUrl: process.env.NEXT_PUBLIC_SOURCEGUIDE_WEBHOOK || '',
+        },
+        {
+            id: 'trackrequest',
+            name: 'Track My Request',
+            icon: PackageSearch,
+            description: 'Request & Shipment Tracking',
+            tagline: 'I can track your purchase requests and shipments from approval to delivery.',
+            disclaimer: 'Status may lag the source system by a few hours',
+            webhookUrl: process.env.NEXT_PUBLIC_TRACKREQUEST_WEBHOOK || '',
         },
     ] satisfies AgentConfig[],
 } as const;
