@@ -26,6 +26,66 @@ interface ChatSessionMeta {
   updatedAt: string;
 }
 
+/* ── Rotating status line shown while an agent is working ── */
+const THINKING_WORD_MS = 5000;
+
+function ThinkingIndicator() {
+  // null until the first word is picked, so the dots render immediately and
+  // the word fades in rather than flashing a fixed opening word.
+  const [index, setIndex] = useState<number | null>(null);
+  const currentRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const total = text.thinkingWords.length;
+
+    // Math.random() lives here, in a timer callback, rather than in render or
+    // a state updater - both of those must stay pure, and React may run them
+    // more than once per commit.
+    const pick = () => {
+      let next = Math.floor(Math.random() * total);
+      if (total > 1) {
+        while (next === currentRef.current) {
+          next = Math.floor(Math.random() * total);
+        }
+      }
+      currentRef.current = next;
+      setIndex(next);
+    };
+
+    pick();
+    const id = setInterval(pick, THINKING_WORD_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div
+      className="rounded-xl rounded-tl-md px-4 py-3 flex items-center gap-2.5"
+      style={{
+        backgroundColor: colors.assistantBubbleBg,
+        border: `1px solid ${colors.assistantBubbleBorder}`,
+      }}
+    >
+      <span className="flex items-center gap-1.5">
+        <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+        <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+        <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></span>
+      </span>
+      {/* Outer span carries the steady flicker, inner one re-mounts on each
+          word change (via key) so the fade replays. */}
+      <span className="animate-pulse">
+        {index !== null && (
+          <span
+            key={index}
+            className="animate-in fade-in duration-700 text-xs text-slate-500 font-medium"
+          >
+            {text.thinkingWords[index]}…
+          </span>
+        )}
+      </span>
+    </div>
+  );
+}
+
 /* ── Assistant Bubble (own component so each message has independent state) ── */
 function AssistantBubble({ content, agentName }: { content: string; agentName: string }) {
   const [copied, setCopied] = useState(false);
@@ -749,17 +809,7 @@ export default function Home() {
               {/* Loading Indicator */}
               {isLoading && (
                 <div className="flex w-full justify-start mt-2">
-                  <div
-                    className="rounded-xl rounded-tl-md px-4 py-3 flex items-center gap-1.5"
-                    style={{
-                      backgroundColor: colors.assistantBubbleBg,
-                      border: `1px solid ${colors.assistantBubbleBorder}`,
-                    }}
-                  >
-                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></span>
-                  </div>
+                  <ThinkingIndicator />
                 </div>
               )}
 

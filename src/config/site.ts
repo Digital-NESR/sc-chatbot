@@ -68,6 +68,35 @@ export const siteConfig = {
         // Table export
         exportTable: 'Export table to Excel',
         exportFilePrefix: 'SupplyChainAI',
+
+        // Rotating status line shown while an agent is working
+        thinkingWords: [
+            'Syncing manifests',
+            'Tracing shipments',
+            'Reconciling ledgers',
+            'Routing consignments',
+            'Auditing stock levels',
+            'Clearing customs',
+            'Mapping lead times',
+            'Querying warehouses',
+            'Balancing inventory',
+            'Validating part numbers',
+            'Scanning bills of lading',
+            'Sequencing deliveries',
+            'Resolving vendors',
+            'Checking incoterms',
+            'Pricing freight lanes',
+            'Indexing catalogs',
+            'Matching purchase orders',
+            'Forecasting demand',
+            'Consolidating pallets',
+            'Verifying approvals',
+            'Optimizing routes',
+            'Cross-docking crates',
+            'Tallying receipts',
+            'Screening suppliers',
+            'Sealing containers',
+        ],
         errorMessage:
             'Detailed error: Unable to connect to the agent. Please try again later.',
         genericError:
