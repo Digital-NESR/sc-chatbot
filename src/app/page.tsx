@@ -1,13 +1,15 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import Image from 'next/image';
-import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid } from 'lucide-react';
+import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2 } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { siteConfig, type AgentId } from '@/config/site';
+import { parseMarkdownTables } from '@/lib/markdownTable';
+import { exportTablesToXlsx, safeFileName } from '@/lib/exportTables';
 
 const { agents, suggestions, colors, images, text } = siteConfig;
 
@@ -25,9 +27,13 @@ interface ChatSessionMeta {
 }
 
 /* ── Assistant Bubble (own component so each message has independent state) ── */
-function AssistantBubble({ content }: { content: string }) {
+function AssistantBubble({ content, agentName }: { content: string; agentName: string }) {
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  // Only messages that actually contain a Markdown table get an export button.
+  const tables = useMemo(() => parseMarkdownTables(content), [content]);
 
   const handleCopy = async () => {
     try {
@@ -36,6 +42,20 @@ function AssistantBubble({ content }: { content: string }) {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       console.error('Failed to copy text');
+    }
+  };
+
+  const handleExportTables = async () => {
+    if (exporting || tables.length === 0) return;
+    setExporting(true);
+    try {
+      const stamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '');
+      const fileName = `${safeFileName(`${text.exportFilePrefix}-${agentName}-${stamp}`)}.xlsx`;
+      await exportTablesToXlsx(tables, fileName);
+    } catch (err) {
+      console.error('Failed to export tables:', err);
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -115,6 +135,23 @@ function AssistantBubble({ content }: { content: string }) {
 
       {/* ── Action Bar ── */}
       <div className="flex items-center justify-end gap-0.5 -mr-1 mt-1.5 opacity-60 hover:opacity-100 transition-opacity duration-200">
+        {/* Export tables to Excel — only rendered when the message has one */}
+        {tables.length > 0 && (
+          <button
+            onClick={handleExportTables}
+            disabled={exporting}
+            aria-label={text.exportTable}
+            title={text.exportTable}
+            className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors duration-150 disabled:opacity-50"
+          >
+            {exporting ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <FileSpreadsheet size={14} />
+            )}
+          </button>
+        )}
+
         {/* Copy */}
         <button
           onClick={handleCopy}
@@ -703,7 +740,7 @@ export default function Home() {
                         </ReactMarkdown>
                       </div>
                     ) : (
-                      <AssistantBubble content={msg.content} />
+                      <AssistantBubble content={msg.content} agentName={activeAgentName} />
                     )}
                   </div>
                 </div>

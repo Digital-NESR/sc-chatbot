@@ -64,6 +64,10 @@ export const siteConfig = {
         disclaimer: (agentDisclaimer: string) =>
             `Supply Chain AI Internal Tool • ${agentDisclaimer}`,
         welcomeGreeting: (agentName: string) => `Hello, I am ${agentName}.`,
+
+        // Table export
+        exportTable: 'Export table to Excel',
+        exportFilePrefix: 'SupplyChainAI',
         errorMessage:
             'Detailed error: Unable to connect to the agent. Please try again later.',
         genericError:
