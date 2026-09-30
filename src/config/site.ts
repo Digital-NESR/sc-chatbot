@@ -69,34 +69,6 @@ export const siteConfig = {
         exportTable: 'Export table to Excel',
         exportFilePrefix: 'SupplyChainAI',
 
-        // Rotating status line shown while an agent is working
-        thinkingWords: [
-            'Syncing manifests',
-            'Tracing shipments',
-            'Reconciling ledgers',
-            'Routing consignments',
-            'Auditing stock levels',
-            'Clearing customs',
-            'Mapping lead times',
-            'Querying warehouses',
-            'Balancing inventory',
-            'Validating part numbers',
-            'Scanning bills of lading',
-            'Sequencing deliveries',
-            'Resolving vendors',
-            'Checking incoterms',
-            'Pricing freight lanes',
-            'Indexing catalogs',
-            'Matching purchase orders',
-            'Forecasting demand',
-            'Consolidating pallets',
-            'Verifying approvals',
-            'Optimizing routes',
-            'Cross-docking crates',
-            'Tallying receipts',
-            'Screening suppliers',
-            'Sealing containers',
-        ],
         errorMessage:
             'Detailed error: Unable to connect to the agent. Please try again later.',
         genericError:
@@ -115,6 +87,53 @@ export const siteConfig = {
             footer: 'NESR Internal Tool • Authorized Personnel Only',
             pageTitle: 'Sign In — Supply Chain AI',
         },
+    },
+
+    /* ── Thinking Words ──
+       Rotated while an agent is working. Kept per agent so the status line
+       matches what was actually asked: a material lookup should never claim
+       to be referencing purchase orders. Two words max, they sit inline. */
+    thinkingWords: {
+        material: [
+            'Checking stock',
+            'Scanning inventory',
+            'Matching parts',
+            'Finding duplicates',
+            'Reading records',
+            'Verifying codes',
+            'Pulling levels',
+            'Searching VDC',
+        ],
+        logistics: [
+            'Reading policies',
+            'Finding clauses',
+            'Checking rules',
+            'Scanning documents',
+            'Locating sections',
+            'Tracing approvals',
+            'Citing sources',
+            'Parsing text',
+        ],
+        sourceguide: [
+            'Finding vendors',
+            'Ranking suppliers',
+            'Checking tiers',
+            'Pulling contacts',
+            'Matching commodity',
+            'Verifying status',
+            'Sorting options',
+            'Reading contracts',
+        ],
+        trackrequest: [
+            'Tracing request',
+            'Checking status',
+            'Locating shipment',
+            'Reading updates',
+            'Following PO',
+            'Checking approvals',
+            'Pulling timeline',
+            'Confirming delivery',
+        ],
     },
 
     /* ── Suggestions ── */

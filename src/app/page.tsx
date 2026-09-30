@@ -11,7 +11,7 @@ import { siteConfig, type AgentId } from '@/config/site';
 import { parseMarkdownTables } from '@/lib/markdownTable';
 import { exportTablesToXlsx, safeFileName } from '@/lib/exportTables';
 
-const { agents, suggestions, colors, images, text } = siteConfig;
+const { agents, suggestions, thinkingWords, colors, images, text } = siteConfig;
 
 interface Message {
   id: number;
@@ -29,14 +29,17 @@ interface ChatSessionMeta {
 /* ── Rotating status line shown while an agent is working ── */
 const THINKING_WORD_MS = 3000;
 
-function ThinkingIndicator() {
-  // null until the first word is picked, so the dots render immediately and
-  // the word fades in rather than flashing a fixed opening word.
+function ThinkingIndicator({ agentId }: { agentId: AgentId }) {
+  const words = (thinkingWords as Record<string, readonly string[]>)[agentId]
+    ?? thinkingWords.material;
+
+  // null until the first word is picked, so nothing flashes a fixed opening
+  // word before the random one takes over.
   const [index, setIndex] = useState<number | null>(null);
   const currentRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const total = text.thinkingWords.length;
+    const total = words.length;
 
     // Math.random() lives here, in a timer callback, rather than in render or
     // a state updater - both of those must stay pure, and React may run them
@@ -55,34 +58,22 @@ function ThinkingIndicator() {
     pick();
     const id = setInterval(pick, THINKING_WORD_MS);
     return () => clearInterval(id);
-  }, []);
+  }, [words]);
 
+  // Deliberately unstyled: no bubble, no dots. Just the word sitting on the
+  // page, so the answer bubble arriving afterwards reads as the thing that
+  // pops up.
   return (
-    <div
-      className="rounded-xl rounded-tl-md px-4 py-3 flex items-center gap-2.5"
-      style={{
-        backgroundColor: colors.assistantBubbleBg,
-        border: `1px solid ${colors.assistantBubbleBorder}`,
-      }}
-    >
-      <span className="flex items-center gap-1.5">
-        <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-        <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-        <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></span>
-      </span>
-      {/* Outer span carries the steady flicker, inner one re-mounts on each
-          word change (via key) so the fade replays. */}
-      <span className="animate-pulse">
-        {index !== null && (
-          <span
-            key={index}
-            className="animate-in fade-in duration-700 text-xs text-slate-500 font-medium"
-          >
-            {text.thinkingWords[index]}…
-          </span>
-        )}
-      </span>
-    </div>
+    <span className="animate-pulse">
+      {index !== null && (
+        <span
+          key={index}
+          className="animate-in fade-in duration-700 text-xs text-slate-400 font-medium"
+        >
+          {words[index]}…
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -125,7 +116,7 @@ function AssistantBubble({ content, agentName }: { content: string; agentName: s
 
   return (
     <div
-      className="relative px-4 py-3 text-[13.5px] leading-[1.6] transition-colors duration-200 rounded-xl rounded-tl-md"
+      className="relative px-4 py-3 text-[13.5px] leading-[1.6] transition-colors duration-200 rounded-xl rounded-tl-md animate-in fade-in zoom-in-95 slide-in-from-bottom-1 duration-300"
       style={{
         backgroundColor: colors.assistantBubbleBg,
         border: `1px solid ${colors.assistantBubbleBorder}`,
@@ -808,8 +799,8 @@ export default function Home() {
 
               {/* Loading Indicator */}
               {isLoading && (
-                <div className="flex w-full justify-start mt-2">
-                  <ThinkingIndicator />
+                <div className="flex w-full justify-start mt-2 px-1">
+                  <ThinkingIndicator agentId={activeAgentId} />
                 </div>
               )}
 
