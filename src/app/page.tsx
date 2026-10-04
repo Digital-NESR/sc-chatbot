@@ -274,6 +274,49 @@ export default function Home() {
   const activeAgent = agents.find(a => a.id === activeAgentId) || agents[0];
   const activeAgentName = activeAgent.name;
 
+  // The orchestrator is presented as the master agent sitting above the rest
+  // rather than as a fifth peer. Its id stays "orchestrator" so stored session
+  // botIds and the webhook env var keep working.
+  const MASTER_AGENT_ID = 'orchestrator';
+  const masterAgent = agents.find(a => a.id === MASTER_AGENT_ID);
+  const subordinateAgents = agents.filter(a => a.id !== MASTER_AGENT_ID);
+
+  // Rendered for both groups, so the master agent and the subordinates stay
+  // visually identical apart from where they sit.
+  const renderAgentButton = (agent: (typeof agents)[number]) => {
+    const isActive = activeAgentId === agent.id && activeSessionId === null;
+    return (
+    <button
+      key={agent.id}
+      onClick={() => handleAgentChange(agent.id as AgentId)}
+      className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all text-sm font-medium relative group ${isActive
+        ? 'bg-nesr-green/10 text-gray-900 shadow-sm ring-1 ring-black/5'
+        : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+        }`}
+    >
+      {/* Active Indicator Border */}
+      {isActive && (
+        <div className="absolute left-0 top-1 bottom-1 w-1 bg-nesr-green rounded-r-md" />
+      )}
+
+      {/* Icon */}
+      <agent.icon
+        size={20}
+        className={`transition-colors ${isActive ? 'text-nesr-green' : 'text-gray-400 group-hover:text-gray-600'
+          }`}
+      />
+
+      {/* Name */}
+      <div className="flex flex-col items-start text-left">
+        <span className={isActive ? 'font-semibold text-nesr-green' : ''}>
+          {agent.name}
+        </span>
+        {isActive && <span className="text-[10px] text-gray-500 font-normal opacity-80 leading-tight">{agent.description}</span>}
+      </div>
+    </button>
+    );
+  };
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -562,43 +605,19 @@ export default function Home() {
 
         {/* Agent List */}
         <div className="flex-none max-h-[40%] overflow-y-auto px-4 pt-6 pb-2 space-y-1">
-          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-2">
-            {text.agentsLabel}
-          </div>
+          {masterAgent && (
+            <>
+              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-2">
+                {text.masterAgentLabel}
+              </div>
+              {renderAgentButton(masterAgent)}
+              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 mt-5 px-2">
+                {text.agentsLabel}
+              </div>
+            </>
+          )}
 
-          {agents.map((agent) => {
-            const isActive = activeAgentId === agent.id && activeSessionId === null;
-            return (
-              <button
-                key={agent.id}
-                onClick={() => handleAgentChange(agent.id as AgentId)}
-                className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all text-sm font-medium relative group ${isActive
-                  ? 'bg-nesr-green/10 text-gray-900 shadow-sm ring-1 ring-black/5'
-                  : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
-                  }`}
-              >
-                {/* Active Indicator Border */}
-                {isActive && (
-                  <div className="absolute left-0 top-1 bottom-1 w-1 bg-nesr-green rounded-r-md" />
-                )}
-
-                {/* Icon */}
-                <agent.icon
-                  size={20}
-                  className={`transition-colors ${isActive ? 'text-nesr-green' : 'text-gray-400 group-hover:text-gray-600'
-                    }`}
-                />
-
-                {/* Name */}
-                <div className="flex flex-col items-start text-left">
-                  <span className={isActive ? 'font-semibold text-nesr-green' : ''}>
-                    {agent.name}
-                  </span>
-                  {isActive && <span className="text-[10px] text-gray-500 font-normal opacity-80 leading-tight">{agent.description}</span>}
-                </div>
-              </button>
-            );
-          })}
+          {subordinateAgents.map(renderAgentButton)}
         </div>
         
         {/* Chat History List */}

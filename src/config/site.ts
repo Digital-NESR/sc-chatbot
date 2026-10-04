@@ -52,7 +52,8 @@ export const siteConfig = {
         // Sidebar
         sidebarTitle: 'Supply Chain AI',
         newChatButton: 'New Chat',
-        agentsLabel: 'SUPPLY CHAIN AGENTS',
+        masterAgentLabel: 'MASTER AGENT',
+        agentsLabel: 'SUBORDINATES',
         signOutButton: 'Sign Out',
 
         // Chat
@@ -179,7 +180,7 @@ export const siteConfig = {
     agents: [
         {
             id: 'orchestrator',
-            name: 'Orchestrator',
+            name: 'SCAI',
             icon: Sparkles,
             description: 'Works across all four assistants',
             tagline: 'Ask anything. I will work out which specialists it needs and bring back one answer.',
