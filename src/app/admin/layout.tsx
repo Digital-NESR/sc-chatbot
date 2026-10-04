@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { isAdmin } from '@/lib/admin';
+import AdminNav from './AdminNav';
 
 export const metadata = {
     title: 'Admin Dashboard | Supply Chain AI',
@@ -34,6 +35,7 @@ export default async function AdminLayout({
                             <ArrowLeft className="w-5 h-5 text-slate-300" />
                         </Link>
                         <h1 className="text-lg font-semibold tracking-tight">Admin Dashboard</h1>
+                        <AdminNav />
                     </div>
                     <div className="flex items-center gap-3 text-sm">
                         <span className="text-white/80">Logged in as</span>
