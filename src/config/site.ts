@@ -1,4 +1,4 @@
-import { Package, Truck, Search, PackageSearch, type LucideIcon } from 'lucide-react';
+import { Package, Truck, Search, PackageSearch, Sparkles, type LucideIcon } from 'lucide-react';
 
 /* ─────────────────────────────────────────────
    SINGLE SOURCE OF TRUTH
@@ -94,6 +94,16 @@ export const siteConfig = {
        matches what was actually asked: a material lookup should never claim
        to be referencing purchase orders. Two words max, they sit inline. */
     thinkingWords: {
+        orchestrator: [
+            'Routing question',
+            'Asking specialists',
+            'Consulting agents',
+            'Gathering answers',
+            'Cross-checking',
+            'Comparing sources',
+            'Combining replies',
+            'Pulling it together',
+        ],
         material: [
             'Checking stock',
             'Scanning inventory',
@@ -138,6 +148,11 @@ export const siteConfig = {
 
     /* ── Suggestions ── */
     suggestions: {
+        orchestrator: [
+            'Do we have a material for this, and who supplies it: ',
+            'What is the policy and the approved vendor for: ',
+            'Is it in stock, and can I raise a PR for it at plant: ',
+        ],
         material: [
             'Check VDC stock for material ID: ',
             'Is there a duplicate part for: ',
@@ -162,6 +177,15 @@ export const siteConfig = {
 
     /* ── Agents ── */
     agents: [
+        {
+            id: 'orchestrator',
+            name: 'Orchestrator',
+            icon: Sparkles,
+            description: 'Works across all four assistants',
+            tagline: 'Ask anything. I will work out which specialists it needs and bring back one answer.',
+            disclaimer: 'Every fact comes from a specialist. Questions spanning several take longer',
+            webhookUrl: process.env.NEXT_PUBLIC_ORCHESTRATOR_WEBHOOK || '',
+        },
         {
             id: 'material',
             name: 'Material AI',

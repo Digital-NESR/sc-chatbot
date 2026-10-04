@@ -6,6 +6,12 @@ import http from 'http';
 // Required for internal n8n servers with self-signed certificates.
 const insecureAgent = new https.Agent({ rejectUnauthorized: false });
 
+// The Orchestrator agent calls the specialist agents one after another, so a
+// cross-domain question can legitimately take over a minute - two specialists
+// measured at 56s. Without this the platform's default serverless timeout cuts
+// the request off and the user sees a network error rather than an answer.
+export const maxDuration = 300;
+
 /**
  * Makes an HTTP/HTTPS POST request using Node's native modules,
  * bypassing the Next.js fetch wrapper which can't use a custom SSL agent.
