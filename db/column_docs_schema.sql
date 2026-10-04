@@ -1,4 +1,5 @@
--- sourceguide_db : column dictionary for SourceGuide AI.
+-- Column dictionary mechanism. Applied to sourceguide_db, catalog_manager_db
+-- and sns_registry_db - the three databases SourceGuide AI reads.
 --
 -- Only the dictionary lives here. The tables and views the agent queries
 -- (ai.sourcing, ai.commodity_catalog, ai.purchase_history over public.sg_*)

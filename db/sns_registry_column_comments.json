@@ -1,0 +1,80 @@
+{
+  "public.sns_record": {
+    "rid": "Internal row id. Join target for sns_record_node.record_rid and sns_record_segment.record_rid.",
+    "registry_id": "Human-readable registry reference, e.g. SOL-IRQ-0001100257-2610271001. Encodes classification, country, supplier code and date. Null until the entry is issued.",
+    "classification": "SOL = sole source (only one supplier can supply it). SGL = single source (several could, one was chosen). Not interchangeable - always say which.",
+    "country": "Country the approval applies to, as a readable name (Iraq, Global, Abu Dhabi (UAE)).",
+    "country_code": "Country code for the approval. Join to sns_country.code.",
+    "scope_level": "'Commodity' or 'Family'. Decides how far the approval reaches - a Family approval covers more than a single Commodity, so check it against the item actually being bought.",
+    "supplier_id": "SAP supplier code. The SAME code as ai.sourcing.supplier_code in sourceguide_db and pir_catalog.suppliers_account_number.",
+    "supplier_name": "Supplier name as recorded on the entry.",
+    "reason": "One of seven standard reasons: OEM / patented technology, Standardization, Regulatory restriction, Warranty preservation, Active contract / master agreement, Geographic or logistics constraint, Strategic relationship. Quote it exactly - do not paraphrase or merge two of them.",
+    "justification": "Free-text business case written by the requestor. Quote it rather than summarising when the user asks why.",
+    "base_status": "Approval state. ONLY 'Active' means it is in force. Anything else (e.g. 'Pending Level 1') is still working through approval - never present it as approval granted.",
+    "spend": "Approved spend ceiling in USD. If the user mentions a value above this, flag that the ceiling is exceeded.",
+    "po_count": "Purchase orders raised against this approval. Currently 0 on every row.",
+    "evidence": "Supporting evidence reference for the justification.",
+    "issue_date": "Date the approval was issued.",
+    "expiry_date": "Date the approval lapses. ALWAYS compare against today and say plainly if it has passed - an expired justification is not cover.",
+    "requestor": "Person who requested the approval.",
+    "created_by": "User who created the record.",
+    "created_at": "When the record was created.",
+    "updated_at": "When the record was last changed.",
+    "closed_at": "When the entry was closed, if it has been.",
+    "closed_by": "Who closed it.",
+    "closed_reason": "Why it was closed.",
+    "renewal_count": "How many times this approval has been renewed.",
+    "renewal_of_rid": "The rid of the entry this one renews, if it is a renewal."
+  },
+  "public.sns_record_node": {
+    "id": "Row id.",
+    "record_rid": "The sns_record this covers. One record normally has SEVERAL rows here - join and aggregate rather than assuming one.",
+    "category": "Top level of the commodity hierarchy the approval covers.",
+    "sub_category": "Second level.",
+    "family": "Third level.",
+    "commodity": "Fourth and most specific level.",
+    "sort_order": "Display order."
+  },
+  "public.sns_record_segment": {
+    "id": "Row id.",
+    "record_rid": "The sns_record this applies to.",
+    "segment": "Business segment the approval applies to. A record may list several."
+  },
+  "public.sns_reason": {
+    "id": "Row id.",
+    "classification": "Which classification the reason belongs to (SOL or SGL).",
+    "name": "The reason text, as stored on sns_record.reason.",
+    "sort_order": "Display order.",
+    "active": "Whether the reason is still offered."
+  },
+  "public.sns_category_manager": {
+    "id": "Row id.",
+    "category": "Commodity category this manager owns. Match against sns_record_node.category.",
+    "manager_name": "Category manager name. Give this exactly - never invent an internal contact.",
+    "manager_email": "Category manager email.",
+    "manager_title": "Job title.",
+    "active": "Whether this manager is current. Filter on it before quoting a contact.",
+    "created_at": "When the row was added.",
+    "updated_at": "When the row was last changed."
+  },
+  "public.sns_country_manager": {
+    "id": "Row id.",
+    "country_code": "Country this manager owns. Join to sns_record.country_code.",
+    "manager_name": "Country manager name. Give this exactly - never invent an internal contact.",
+    "manager_email": "Country manager email.",
+    "manager_title": "Job title.",
+    "active": "Whether this manager is current. Filter on it before quoting a contact.",
+    "created_at": "When the row was added.",
+    "updated_at": "When the row was last changed."
+  },
+  "public.sns_supplier": {
+    "sap_id": "SAP supplier code. Same codes as sourceguide_db and pir_catalog.",
+    "name": "Supplier name.",
+    "status": "Supplier status in the registry.",
+    "closed_at": "When the supplier was closed, if it was.",
+    "closed_by": "Who closed it.",
+    "closed_reason": "Why it was closed.",
+    "created_at": "When the row was added.",
+    "updated_at": "When the row was last changed."
+  }
+}

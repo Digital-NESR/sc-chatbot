@@ -1,25 +1,27 @@
 import { Pool } from 'pg';
 
 /**
- * The two agents whose column dictionaries are editable from /admin/columns.
+ * The databases whose column dictionaries are editable from /admin/columns.
  *
- * They store descriptions differently, and deliberately so. materials_db rebuilds
+ * Descriptions are stored two ways, and deliberately so. materials_db rebuilds
  * every table daily from a staging clone, so its descriptions live in the same
- * load_config row that drives the load and get replayed on every swap. sourceguide_db
- * is not rebuilt that way, so a standalone ai.column_docs table is enough there.
+ * core.load_config row that drives the load and get replayed on every swap. The
+ * others are not rebuilt that way, so a standalone ai.column_docs table is
+ * enough there.
  *
- * Both end up as real Postgres COMMENTs, which is what each agent actually reads
- * at query time.
+ * Both end up as real Postgres COMMENTs, which is what each agent actually
+ * reads at query time.
  */
 
-export type SourceId = 'materials' | 'sourceguide';
+export type SourceId = 'materials' | 'sourceguide' | 'sns' | 'catalog';
 
 type SourceDef = {
   id: SourceId;
   label: string;
-  agent: string;
   database: string;
-  /** Objects the agent can see, as "schema.name". */
+  /** Where the editable copy lives. 'load_config' is driven by the loader. */
+  storage: 'load_config' | 'column_docs';
+  /** Objects the agent can see. Empty means "ask the database". */
   objects: { schema: string; name: string }[];
 };
 
@@ -27,16 +29,15 @@ export const SOURCES: Record<SourceId, SourceDef> = {
   materials: {
     id: 'materials',
     label: 'Materials AI',
-    agent: 'Material AI',
     database: process.env.MATERIALS_DB_NAME || 'materials_db',
-    // Driven from core.load_config rather than a fixed list.
-    objects: [],
+    storage: 'load_config',
+    objects: [], // taken from core.load_config
   },
   sourceguide: {
     id: 'sourceguide',
-    label: 'SourceGuide AI',
-    agent: 'SourceGuide AI',
+    label: 'SourceGuide — suppliers & spend',
     database: process.env.SOURCEGUIDE_DB_NAME || 'sourceguide_db',
+    storage: 'column_docs',
     objects: [
       { schema: 'ai', name: 'sourcing' },
       { schema: 'ai', name: 'commodity_catalog' },
@@ -44,10 +45,41 @@ export const SOURCES: Record<SourceId, SourceDef> = {
       { schema: 'public', name: 'sg_champions' },
     ],
   },
+  catalog: {
+    id: 'catalog',
+    label: 'SourceGuide — contracted prices',
+    database: process.env.CATALOG_DB_NAME || 'catalog_manager_db',
+    storage: 'column_docs',
+    objects: [
+      { schema: 'public', name: 'pir_catalog' },
+      { schema: 'public', name: 'supplier_directory' },
+      { schema: 'public', name: 'catalog_entry' },
+      { schema: 'public', name: 'rate_version' },
+      { schema: 'public', name: 'currency' },
+    ],
+  },
+  sns: {
+    id: 'sns',
+    label: 'SourceGuide — sole source registry',
+    database: process.env.SNS_DB_NAME || 'sns_registry_db',
+    storage: 'column_docs',
+    objects: [
+      { schema: 'public', name: 'sns_record' },
+      { schema: 'public', name: 'sns_record_node' },
+      { schema: 'public', name: 'sns_record_segment' },
+      { schema: 'public', name: 'sns_reason' },
+      { schema: 'public', name: 'sns_supplier' },
+      { schema: 'public', name: 'sns_category_manager' },
+      { schema: 'public', name: 'sns_country_manager' },
+    ],
+  },
 };
 
+const ORDER: SourceId[] = ['materials', 'sourceguide', 'catalog', 'sns'];
+export const SOURCE_LIST = ORDER.map((id) => SOURCES[id]);
+
 export function isSourceId(v: unknown): v is SourceId {
-  return v === 'materials' || v === 'sourceguide';
+  return typeof v === 'string' && Object.prototype.hasOwnProperty.call(SOURCES, v);
 }
 
 const DB_VAR_NAMES = ['DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD'] as const;

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { isAdmin } from '@/lib/admin';
-import { SOURCES, isSourceId, poolFor, type SourceId } from '@/lib/columnSources';
+import { SOURCES, SOURCE_LIST, isSourceId, poolFor, type SourceId } from '@/lib/columnSources';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,8 +23,8 @@ type OutTable = { name: string; schema: string; note: string; columns: OutColumn
 
 /** Objects whose columns are editable, and how they are grouped in the UI. */
 async function listObjects(source: SourceId): Promise<{ schema: string; name: string; note: string }[]> {
-  if (source === 'sourceguide') {
-    return SOURCES.sourceguide.objects.map((o) => ({ ...o, note: '' }));
+  if (SOURCES[source].storage === 'column_docs') {
+    return SOURCES[source].objects.map((o) => ({ ...o, note: '' }));
   }
   // materials: whatever the loader is currently configured to publish.
   const { rows } = await poolFor('materials').query<{ pg_table: string; load_mode: string | null }>(
@@ -85,7 +85,7 @@ export async function GET(request: Request) {
       source,
       label: SOURCES[source].label,
       database: SOURCES[source].database,
-      sources: Object.values(SOURCES).map((s) => ({ id: s.id, label: s.label })),
+      sources: SOURCE_LIST.map((s) => ({ id: s.id, label: s.label })),
       tables,
       total,
       described,
@@ -148,7 +148,7 @@ export async function PATCH(request: Request) {
 
     await client.query('BEGIN');
 
-    if (source === 'materials') {
+    if (SOURCES[source].storage === 'load_config') {
       if (description === '') {
         await client.query(
           `UPDATE core.load_config SET col_comments = col_comments - $2 WHERE pg_table = $1`,
@@ -189,7 +189,7 @@ export async function PATCH(request: Request) {
         [schema, table, column],
       );
       await client.query(rows[0].ddl);
-    } else if (source === 'materials') {
+    } else if (SOURCES[source].storage === 'load_config') {
       await client.query(`SELECT core.apply_comments('core', $1)`, [table]);
     } else {
       await client.query(`SELECT ai.apply_column_docs($1, $2)`, [schema, table]);
