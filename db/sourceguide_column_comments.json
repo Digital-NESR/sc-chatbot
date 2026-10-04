@@ -1,0 +1,63 @@
+{
+  "ai.sourcing": {
+    "country_code": "Country of the sourcing entry: SA, OM, EG, ID, AUH, HQ, KW, IQ, DZ, IN, LY, EOS. EOS Jafza is treated as a country here. \"UAE\" is ambiguous - it may mean HQ Dubai, AUH or EOS, so ask which.",
+    "country": "Readable country name for country_code, from sg_countries.",
+    "commodity_id": "Commodity identifier. Join to ai.commodity_catalog.commodity_id. This view is the ONLY place supplier columns exist - the catalogue has none.",
+    "commodity": "Commodity name, denormalised from the commodity catalogue.",
+    "spend_type": "Direct or Indirect spend.",
+    "category": "Top-level commodity category, 17 values (Logistics, Facility, IT, Field Technical Equipment & Services...).",
+    "sub_category": "Second-level commodity grouping, 78 values (Completion Tools, Shipping Services, Life Safety (PPE)...).",
+    "family": "Third-level commodity grouping, 386 values. Null for ~7% of rows.",
+    "tier": "Supplier tier for this commodity and country: Preferred or Backup.",
+    "supplier_code": "SAP supplier code. Join to ai.purchase_history.supplier_code for historic spend.",
+    "supplier_name": "Supplier name, resolved in order: the AVL name, then a name recovered from spend history, then the bare supplier code. Which one was used is in name_source.",
+    "supplier_email": "Contact email(s) from the AVL. May hold several addresses separated by commas or semicolons - split them and render each separately. Only ever populated when in_avl is true.",
+    "central_block_status": "Active, or \"Inactive - Central block\" for a centrally blocked supplier. Blocked suppliers must still be shown and clearly flagged, never hidden.",
+    "in_avl": "True when the supplier was found in the Approved Vendor List. False means no email exists by construction, not missing data. CURRENTLY TRUE FOR EVERY ROW: every active mapping matches an AVL supplier today. The false branch is live and will produce rows as soon as a mapping points at a supplier absent from supplier_avl.",
+    "name_source": "Where supplier_name came from: AVL, Spend History, or Code only. Anything other than AVL means there is no contact on file, so route the user to the country procurement champion. Currently AVL for every row, for the same reason as in_avl."
+  },
+  "ai.commodity_catalog": {
+    "commodity_id": "Commodity identifier. Join target for ai.sourcing.commodity_id.",
+    "commodity_code": "External UNSPSC-style commodity code. Stored as an EMPTY STRING rather than null for many rows, so test with <> '' not IS NOT NULL.",
+    "commodity": "Commodity name as presented to users.",
+    "spend_type": "Direct or Indirect spend.",
+    "category": "Top-level commodity category.",
+    "sub_category": "Second-level commodity grouping.",
+    "family": "Third-level commodity grouping.",
+    "description": "Free-text description of what the commodity covers. Worth searching alongside commodity and keywords.",
+    "keywords": "Comma-separated synonyms and abbreviations (\"coiled tubing, CT, CT unit\"). Empty string on some rows. Search this: it carries the terms users actually type, which the formal commodity name often does not.",
+    "available_countries": "text[] of country codes with at least one approved supplier for this commodity. Test with: 'EG' = ANY(available_countries). An EMPTY ARRAY means no country currently has an approved supplier - that is a real answer, not a missing value.",
+    "supplier_links": "Number of supplier mappings for this commodity across all countries.",
+    "search_text": "Concatenated searchable text for the commodity. The widest single field to search, and distinct for every row."
+  },
+  "ai.purchase_history": {
+    "po_number": "Purchase order number. With po_line it identifies the line.",
+    "po_line": "PO line item number. Always select it alongside po_number: a search often matches only some lines of a PO, and only those should be shown.",
+    "order_date": "Date the line was ordered. Sort spend most-recent-first on this.",
+    "material_id": "SAP material number where the line is for a stocked material. Blank for services.",
+    "item_description": "Free-text description of what was bought. This is the field to search when the user names a specific product rather than a commodity category.",
+    "item_key": "Normalised item identity: the material number for goods, or SVC:<description> for services. Use it to group the same item across different POs.",
+    "is_service": "True when the line is a service rather than a stocked material.",
+    "commodity": "Commodity assigned to the line.",
+    "segment": "NESR business segment the spend belongs to, 25 values (Coiled Tubing Services, Hydraulic Fracturing, Ops Support...).",
+    "country": "Operating country of the purchase, as SHORT names: KSA, UAE, Oman. WARNING: this vocabulary does NOT match ai.sourcing.country or country_code - never join the two on a country name.",
+    "supplier_country": "Country the supplier itself is in, as FULL names: Saudi Arabia, United Arab Emirates. A third vocabulary again, different from country on this same view.",
+    "supplier_code": "SAP supplier code. Join to ai.sourcing.supplier_code. Always exclude 0001200040 (ADHOC VENDOR) from spend analysis - it is a placeholder for ad-hoc purchases.",
+    "supplier_name": "Supplier name as recorded on the purchase order.",
+    "order_qty": "Quantity ordered on the line. CAN BE ZERO - check the divisor before computing a unit price, and report the row as not calculable rather than guessing.",
+    "uom": "Unit of measure for order_qty, 87 distinct values.",
+    "unit_price": "Unit price in LOCAL currency - see the currency column. Never prefix it with $, and never sum or average it across rows.",
+    "order_value": "Line value in LOCAL currency. Never total or average across rows: different rows are in different currencies.",
+    "currency": "ISO currency of unit_price and order_value, 18 distinct values. Always show it alongside any local amount.",
+    "order_value_usd": "Line value converted to USD, and authoritative. The ONLY money column safe to total, average, rank or compare across rows. A USD unit price is order_value_usd / NULLIF(order_qty, 0) - never convert unit_price with your own rate.",
+    "still_delv_qty": "Quantity ordered but not yet delivered. Only ~11% populated, so a null does NOT mean fully delivered - read delivery_status alongside it.",
+    "delivery_status": "Delivery state of the line: Fully delivered, Partially delivered, Not delivered, or Unknown. Unknown is common and means no information, NOT undelivered."
+  },
+  "public.sg_champions": {
+    "id": "Row identifier.",
+    "country_code": "Country the champion covers. Join to ai.sourcing.country_code.",
+    "name": "Procurement champion name. Use exactly as stored - never paraphrase or invent an internal contact.",
+    "email": "Champion email address. Some countries (AUH, EOS) have TWO champions - list both when that is the case.",
+    "created_at": "When the row was added."
+  }
+}
