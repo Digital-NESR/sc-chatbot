@@ -5,7 +5,7 @@ import { ChevronRight, ArrowLeft, Loader2, User, MessageSquare, Users, Activity,
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { siteConfig } from '@/config/site';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Brush } from 'recharts';
 
 // Helper to get agent name
 const getAgentName = (botId: string) => {
@@ -24,6 +24,11 @@ export default function AdminDashboard() {
     const [selectedCountry, setSelectedCountry] = useState<string>('');
     const [selectedAgentFilter, setSelectedAgentFilter] = useState<string>('');
     const [chartMode, setChartMode] = useState<'combined' | 'agent'>('combined');
+
+    // Visible window into timeSeriesData, held as indices rather than dates so
+    // the Brush and the preset buttons drive the same piece of state. The chart
+    // is always given the full series; only the window moves.
+    const [range, setRange] = useState<{ start: number; end: number } | null>(null);
 
     const [selectedUser, setSelectedUser] = useState<any | null>(null);
     const [sessions, setSessions] = useState<any[]>([]);
@@ -126,6 +131,47 @@ export default function AdminDashboard() {
             return true;
         });
     }, [users, selectedJobTitle, selectedDepartment, selectedCountry, selectedAgentFilter]);
+
+    useEffect(() => {
+        if (!timeSeriesData.length) {
+            setRange(null);
+            return;
+        }
+        const end = timeSeriesData.length - 1;
+        // Open on the last 30 days rather than the whole history, which is what
+        // made the axis unreadable once there were months of data.
+        setRange({ start: Math.max(0, end - 29), end });
+    }, [timeSeriesData]);
+
+    const applyPreset = (days: number | 'all') => {
+        if (!timeSeriesData.length) return;
+        const end = timeSeriesData.length - 1;
+        setRange({ start: days === 'all' ? 0 : Math.max(0, end - (days - 1)), end });
+    };
+
+    // Which preset the current window corresponds to, so the buttons can show
+    // state after the Brush has been dragged.
+    const activePreset = (() => {
+        if (!range || !timeSeriesData.length) return null;
+        if (range.end !== timeSeriesData.length - 1) return null;
+        const span = range.end - range.start + 1;
+        if (range.start === 0) return 'all';
+        if (span === 7) return 7;
+        if (span === 30) return 30;
+        if (span === 90) return 90;
+        return null;
+    })();
+
+    const rangeLabel = (() => {
+        if (!range || !timeSeriesData.length) return '';
+        const fmt = (d: string) =>
+            new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        const from = timeSeriesData[range.start]?.date;
+        const to = timeSeriesData[range.end]?.date;
+        if (!from || !to) return '';
+        const days = range.end - range.start + 1;
+        return from === to ? fmt(from) : `${fmt(from)} – ${fmt(to)} · ${days} days`;
+    })();
 
     const chartColors = ['#e11d48', '#0284c7', '#d97706', '#7c3aed', '#10b981', '#f43f5e', '#3b82f6'];
     // -----------------------------------------------------------------
@@ -359,7 +405,22 @@ export default function AdminDashboard() {
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
                     <div>
                         <h2 className="text-lg font-semibold text-slate-800">Usage Over Time</h2>
-                        <p className="text-sm text-slate-500">Daily session volume across the platform.</p>
+                        <p className="text-sm text-slate-500">
+                            {rangeLabel || 'Daily session volume across the platform.'}
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap justify-center">
+                    <div className="flex bg-slate-100 p-1 rounded-lg">
+                        {([7, 30, 90, 'all'] as const).map((p) => (
+                            <button
+                                key={String(p)}
+                                onClick={() => applyPreset(p)}
+                                disabled={!timeSeriesData.length}
+                                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors disabled:opacity-40 ${activePreset === p ? 'bg-white shadow-sm text-[#307c4c]' : 'text-slate-600 hover:text-slate-900'}`}
+                            >
+                                {p === 'all' ? 'All' : `${p}D`}
+                            </button>
+                        ))}
                     </div>
                     <div className="flex bg-slate-100 p-1 rounded-lg">
                         <button 
@@ -375,9 +436,10 @@ export default function AdminDashboard() {
                             By Agent
                         </button>
                     </div>
+                    </div>
                 </div>
                 
-                <div className="h-[300px] w-full">
+                <div className="h-[360px] w-full">
                     {timeSeriesData.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={timeSeriesData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
@@ -405,6 +467,22 @@ export default function AdminDashboard() {
                                         />
                                     ))
                                 )}
+                                {/* The range slider. The chart keeps the full
+                                    series and this moves the window over it. */}
+                                <Brush
+                                    dataKey="date"
+                                    height={26}
+                                    travellerWidth={8}
+                                    stroke="#307c4c"
+                                    fill="#f8fafc"
+                                    startIndex={range?.start}
+                                    endIndex={range?.end}
+                                    onChange={(r) => {
+                                        if (typeof r?.startIndex === 'number' && typeof r?.endIndex === 'number') {
+                                            setRange({ start: r.startIndex, end: r.endIndex });
+                                        }
+                                    }}
+                                />
                             </LineChart>
                         </ResponsiveContainer>
                     ) : (
