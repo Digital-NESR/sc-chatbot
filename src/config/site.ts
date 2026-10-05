@@ -53,7 +53,7 @@ export const siteConfig = {
         sidebarTitle: 'Supply Chain AI',
         newChatButton: 'New Chat',
         masterAgentLabel: 'MASTER AGENT',
-        agentsLabel: 'SUBORDINATES',
+        agentsLabel: 'SUBORDINATE AGENTS',
         signOutButton: 'Sign Out',
 
         // Chat
