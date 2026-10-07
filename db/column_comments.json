@@ -89,7 +89,7 @@
     "plant": "4-digit SAP plant code. Join to all_plants.plant_code.",
     "posting_date": "Date the movement was posted. Use this for consumption-over-time analysis.",
     "material_plant": "Composite key \"material-plant\" built by the source model. Redundant with material + plant; prefer those.",
-    "event": "Direction flag: 1 = inbound/receipt, -1 = outbound/issue. UNVERIFIED - inferred from the two observed values.",
+    "event": "UNUSED: do NOT use. Documented as 1=inbound/-1=outbound, but the data contradicts that: movement type Z01 (GI, outbound) is event=1 on all 303,665 rows while 101 (GR, inbound) is event=-1, and 98,421 rows are null. Classify movements with movement_type_desc instead (GI / GR / TR / GI ICPO / GR ICPO).",
     "loaded_at": "Timestamp this row was written by the Data Loader. Operational metadata, not from the source."
   },
   "purchase_requisation": {
