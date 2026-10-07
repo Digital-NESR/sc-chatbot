@@ -82,3 +82,75 @@ Neither table has a last-changed column, so the window is an OR-chain over every
 activity date the document carries — which is a proxy, not a guarantee, and the
 weekly full reload is what makes it safe. It also removes rows deleted upstream,
 which an incremental merge cannot do.
+
+## The `track` schema (Track My Request)
+
+`track_schema.sql` builds eight views that the Track My Request agent reads
+instead of `core.*`. Materials AI keeps `core.*`; the two agents never name the
+same object, which is what stops the orchestrator routing on a coin flip.
+
+| View | What it is |
+| --- | --- |
+| `track.pr_line` | One row per requisition line, conversion and release state resolved |
+| `track.po_line` | One row per purchase order line, release and receipt state resolved |
+| `track.open_pr` | Requisitions not yet converted to a PO |
+| `track.pr_pending_release` | Requisitions still awaiting final approval |
+| `track.po_draft` | POs created but never submitted for approval |
+| `track.po_pending_release` | POs submitted but not yet fully released |
+| `track.po_open` | Released POs with quantity still to deliver |
+| `track.request_lifecycle` | PR → PO → receipt, one row per requisition line |
+
+### Why the views live in a table
+
+`core.publish_all()` runs `DROP TABLE IF EXISTS core.<t>` with **no CASCADE**
+whenever a table loads in full mode. A view on that table makes the DROP fail,
+which fails the whole load. `supplychain` and `purchase_requisation` are
+incremental on weekdays but **reload in full every Saturday**, so a hand-made
+view over them would have survived six days and then broken the Saturday run.
+
+So the views are registered in `core.view_defs` and rebuilt by
+`core.rebuild_track_views()`, which `publish_all` calls after every publish —
+the same pattern `index_defs` and `col_comments` already use.
+
+**Edit the views in `track_schema.sql` and re-apply it. A bare `CREATE VIEW`
+will be gone by Saturday.** The same goes for the index this adds:
+`supplychain (purchase_req)` is registered in `index_defs`, because the
+lifecycle join degrades without it.
+
+### Two judgements baked into these views
+
+Both were wrong on the first attempt and are worth keeping straight:
+
+- **Receipt is decided by outstanding quantity, not delivered quantity.**
+  338,304 lines are item category 9 — service lines with ordered qty 1,
+  delivered qty 0, nothing outstanding, and a GR posting date on 96% of them.
+  Receipt there is a service entry sheet. Judging by `delv_qty` labels every
+  one of them "awaiting receipt" when they are finished. `po_line` exposes
+  `is_service_line` so quantities are not compared across the two kinds.
+- **PR approval is `pr_release_date_final`, not `release_date`.** `release_date`
+  is populated on every row including never-submitted ones, so it is not an
+  approval flag. `pr_release_date_final` is present on 100% of fully approved
+  lines and under 1% of lines with no release status.
+
+### PO release states
+
+Three states, grounded in the data rather than assumed:
+
+| `release_state` | Raw | Lines | Meaning |
+| --- | --- | --- | --- |
+| `Draft` | status blank, `frgke` blank | 7,362 | Never entered a release strategy |
+| `Under Release` | `Not Approved` / `frgke` B | 5,166 | In a strategy, not yet approved |
+| `Released` | `Approved` / `frgke` G | 721,749 | Released; 99.99% carry a release date |
+
+`Draft` is the state behind the "POs in Draft Status" figure on the
+*Procurement Aging Insights* report. Under that report's filters this gives 297
+purchase orders against the report's 280 — the gap is refresh lag, since the
+core tables trail the semantic model by a day or two.
+
+### Performance note
+
+`request_lifecycle` rolls the PO side up with a grouped subquery and a hash
+join. It was first written as a correlated `LATERAL`, which re-probed
+`supplychain` once per requisition line: a single PR lookup took 2.9s and a
+whole-table aggregate did not finish in 20 minutes. Grouped first, the same
+aggregate takes 4s and a point lookup under 1s. Do not reintroduce the LATERAL.
