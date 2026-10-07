@@ -11,6 +11,7 @@ This file exists so the repo records where that logic lives.
 | Data Loader (Materials AI) | `KcnJZ4NHGnYw56gl` | Pulls 12 tables from the Power BI Inventory Twin model into `materials_db`, then refreshes changed embeddings. Cron `0 9-16 * * *` UTC |
 | Vector DB loader (Materials AI) | `ucS0yaV74v4bxRU1` | Embeds material descriptions into `materials_vector_db`. Daily reconciliation pass, cron `30 15 * * *` UTC |
 | Materials AI | `IQJq5ZajOBsscUq2` | The agent: SQL tool, pgvector search, calculator |
+| Orchestrator (SCAI) | `WsxqwYymk8kn50AU` | Routes a question to one of the four specialists and merges the answer |
 | Track My Request | `IsIZu5Ob2srIKFxU` | Request lifecycle agent. Reads the `track` schema plus live Shipwaves tracking |
 | Data Loader (Track My Request) | `i1SklXpuElEsYz3c` | Exploration only so far. No load logic yet |
 
@@ -55,3 +56,22 @@ asserts the opposite.
 The token nodes (`Get Power BI Token`, `Range Token`) hold the Power BI client
 secret as a plain body parameter rather than in a credential, so any export
 carries it. Strip it before putting an export anywhere it would be shared.
+
+## Routing: Materials AI vs Track My Request
+
+These two are the pair the orchestrator is most likely to confuse, because both
+know about requisitions and purchase orders. The split is by what the question is
+ABOUT, and it is stated in three places that must agree: the orchestrator's system
+prompt, both tool descriptions, and each agent's own prompt.
+
+- A **document** and where it has got to → Track My Request (`track.*`)
+- A **material**, stock, or an analytical total → Materials AI (`core.*`)
+
+The orchestrator's `ask_material_ai` description used to claim it covered
+“purchase requisitions and purchase orders”, which collided head-on with
+Track My Request. If you edit one of the three places, edit all three.
+
+Verified end to end through the orchestrator: “Where has PR 1005026000 got to?”
+and “How many POs are in draft?” both route to Track My Request, and the draft
+count comes back as 1,882 purchase orders — distinct documents, not the 7,331
+underlying lines.
