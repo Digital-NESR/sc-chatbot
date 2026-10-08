@@ -361,3 +361,21 @@ join. It was first written as a correlated `LATERAL`, which re-probed
 `supplychain` once per requisition line: a single PR lookup took 2.9s and a
 whole-table aggregate did not finish in 20 minutes. Grouped first, the same
 aggregate takes 4s and a point lookup under 1s. Do not reintroduce the LATERAL.
+
+## Geography in the track views
+
+`track.po_line` exposes `country` (the OPERATING country of the document),
+`comp_code`, `comp_co_desc`, `opco_country` and `supplier_country`. `pr_line`
+and `request_lifecycle` expose `country`, and `request_lifecycle` also carries
+`po_countries` for the PO side.
+
+These were missing from the first version of the views, and the omission caused
+a real wrong answer. Asked for DHL purchase orders in Iraq, the agent had no
+operating-country column and fell back to matching plant DESCRIPTIONS containing
+"Iraq", which catches only a fraction.
+
+`supplier_country` is not a substitute: it is the supplier's own country, not
+where the order was raised.
+
+Country values are SAP spellings — `Utd.Arab Emir.`, not `UAE` — so a filter
+should be checked against `SELECT DISTINCT country` first.
