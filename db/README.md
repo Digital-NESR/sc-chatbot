@@ -219,6 +219,42 @@ published.
 but not in the extraction plan, `publish_all` would be handed a count for rows
 no range ever staged.
 
+## Loading from more than one Power BI model
+
+`load_config.dataset_id` names the semantic model each table is extracted from.
+It defaults to the Inventory Twin / InventoryShare model
+(`3095d467-2a63-4db9-9a67-0cc48a8b6b0f`) that every original table came from.
+
+A DAX query cannot reference tables in another model, so `Build Count Query`
+emits **one item per dataset** and `Fetch Expected Counts` runs once per item
+(its `executeOnce` is off). `Range Plan` reads `dataset_id` from `load_config`
+rather than taking it from the parent, so there is one source of truth about
+where a table lives.
+
+| Table | Model |
+| --- | --- |
+| the original 12 | Inventory Twin / InventoryShare |
+| `gr_data` | GR Analyser (`ce263715-0dda-4f57-93a3-e47af1e04cb3`) |
+
+### The expected-count guard counts ROWS, not distinct rows
+
+It used to be `COUNTROWS(SUMMARIZE(src, ...every column...))`, which counts
+distinct combinations, while extraction uses `SELECTCOLUMNS`, which does not
+deduplicate. Those agree only for a table with no exact duplicate rows — true of
+all twelve original tables, which is why it went unnoticed, and provably so,
+since each of them publishes successfully today.
+
+`GR_DATA` breaks it. A goods receipt carries no material document number, so two
+receipts of the same quantity against the same PO line on the same day are
+genuinely identical rows — PO 4250000003 line 00010 has **52** of them. Measured
+on the full table: `COUNTROWS` gives **935,619**, `SUMMARIZE` gives **849,175**.
+The guard would have expected 86,444 fewer rows than were staged and skipped
+`gr_data` as a count mismatch on every run, forever.
+
+Deduplication, where a table wants it, belongs in `dax_source` — which is how
+`material_plant_extension` does it, with
+`SUMMARIZE('MB52', 'MB52'[Material], 'MB52'[Plant])`.
+
 ## The `track` schema (Track My Request)
 
 `track_schema.sql` builds eight views that the Track My Request agent reads
