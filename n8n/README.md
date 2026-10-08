@@ -75,3 +75,19 @@ Verified end to end through the orchestrator: “Where has PR 1005026000 got to?
 and “How many POs are in draft?” both route to Track My Request, and the draft
 count comes back as 1,882 purchase orders — distinct documents, not the 7,331
 underlying lines.
+
+## Empty result vs not-yet-loaded
+
+A `track.*` view with no rows looks identical whether the data is genuinely
+empty or the source table has never loaded. Asked which POs were awaiting
+approval before `po_release` had loaded, the agent answered **“there are
+currently no purchase orders waiting for approval 🎉”** — a false business fact
+that reads exactly like a real answer.
+
+`track.data_freshness` exposes `never_loaded` and `last_loaded_at` per source
+table. The agent is required to check it before reporting that anything does
+not exist, and the orchestrator is required to relay a “not loaded” answer
+as-is rather than rewording it into “there are none”.
+
+Verified: the same question now returns “the PO approval data hasn't been loaded
+into the system yet”, and the orchestrator passes that through unchanged.
