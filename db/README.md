@@ -379,3 +379,31 @@ where the order was raised.
 
 Country values are SAP spellings — `Utd.Arab Emir.`, not `UAE` — so a filter
 should be checked against `SELECT DISTINCT country` first.
+
+## Bucket skew: when a bucket column cannot partition a table
+
+`release_strategy` would not load whole, and the reason generalises.
+
+Bucketing takes `RIGHT(bucket_col, n)`, so the finest partition a table can have
+is limited by that column's value distribution — and **`RIGHT(blank, n)` is
+always blank**, so every row with an empty bucket column lands in the single
+catch-all call, which no `bucket_chars` can split.
+
+On `release_strategy` bucketed by `Plant`, 63,223 rows had a blank plant. That
+catch-all was ~695,000 cells, roughly 32 MB, so Power BI truncated it silently
+and the extraction stalled near 320,000 rows regardless of configuration — two
+different setups landed within 300 rows of each other, which is what gave it
+away. Re-bucketing on `Approver` (211 distinct values, 192 distinct 3-digit
+endings) took it to 1,013,983 of 1,035,384.
+
+Two things to take from this:
+
+- **Choose a bucket column with high cardinality and few blanks.** Check before
+  configuring: `SELECT count(DISTINCT right(col, n)), count(*) FILTER (WHERE col
+  IS NULL OR col = '')`.
+- **`TARGET_CELLS_PER_CALL` assumes buckets are evenly sized.** The planner
+  divides total cells by bucket count; on a skewed column the hot buckets are
+  many times that average and can exceed 15 MB even when the average looks safe.
+
+The guard did its job throughout: every short extraction was refused rather than
+published, so nothing incomplete ever reached the agent.
