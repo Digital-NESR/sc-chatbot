@@ -234,7 +234,42 @@ where a table lives.
 | Table | Model |
 | --- | --- |
 | the original 12 | Inventory Twin / InventoryShare |
-| `gr_data` | GR Analyser (`ce263715-0dda-4f57-93a3-e47af1e04cb3`) |
+| `gr_data` | GR Analyser |
+| `ub_grir` | GRIR |
+| `ap_aging` | Accounts Payable Aging |
+| `release_strategy` | NESR Release Strategy |
+| `pr_release`, `po_release` | PR & PO Under Release Insights |
+| `zmb5oa` | ZMB5OA |
+
+### Filter at the source, not after loading
+
+Unfiltered, the six Track My Request tables are **185M cells — five times the
+entire weekday load**. Filtered to what the agent actually needs they are about
+26M. Every filter is in `dax_filter` or `dax_source`, so the row never crosses
+the API at all:
+
+| Table | Source rows | Loaded | Filter |
+| --- | --- | --- | --- |
+| `ub_grir` | 2,838,448 | **23,969** | uncleared only — cleared entries are matched and finished |
+| `pr_release` | 689,677 | **33,743** | under release only — `with_whom` is meaningless once signed |
+| `po_release` | 770,204 | **4,647** | under release only |
+| `release_strategy` | 1,035,384 | **510,608** | deduped in `dax_source` |
+| `ap_aging` | 774,298 | **373,241** | PO-linked invoices only |
+| `zmb5oa` | 20,999 | 20,999 | none needed |
+
+Two of these carry something that exists nowhere else in the platform:
+`pr_release.with_whom` and `po_release.with_whom` name **who a document is
+sitting with right now**, and `zmb5oa.intransit_quantity` is the only in-transit
+figure anywhere. Neither is derivable from `core.*`.
+
+### Source column names that lie
+
+- `PR_RELEASE[PR_Sitting_Release]` sounds like a status. It holds the **PR
+  number**, and is the only PR identifier in that table.
+- `UB_GRIR[Text]` is renamed `doc_text`, since `text` is a type name.
+- `PO_RELEASE[Segement]` and `[Account_Assignement]` are misspelled at source
+  and preserved as-is in `src_cols`.
+
 
 ### The expected-count guard counts ROWS, not distinct rows
 
