@@ -114,10 +114,33 @@ outage; 5 would also work and costs about one second less.
 
 `supplychain` and `purchase_requisation` have no last-changed column at all, so
 "recently active" there is an OR-chain over every activity date the document can
-acquire — a proxy, not a guarantee. That is why the weekly full reload exists
-(`full_reload_dow = 6`). It is also the only thing that removes rows deleted
-upstream, which an incremental merge cannot do, so every incremental table needs
-it regardless of how good its date column is.
+acquire. Those are mostly *birth* dates — created, released, received — so a later
+amendment that posts an invoice, sets a deletion flag or changes a quantity moves
+no date at all and the row never re-enters the window on its own.
+
+**The window is therefore not a correctness mechanism, and no value of it ever
+was.** Measured against currently-open lines — the ones that can still change:
+
+| Window | supplychain: open lines covered | rows | calls | PR: covered | rows | calls |
+| --- | --- | --- | --- | --- | --- | --- |
+| 14d | 67% | 39,589 | 56 | 62% | 20,232 | 15 |
+| 30d | 76% | 48,648 | 67 | 77% | 30,546 | 22 |
+| 60d | 81% | 65,279 | 91 | 88% | 48,991 | 35 |
+| **90d** | **85%** | **82,451** | **125** | **93%** | **66,668** | **48** |
+| 180d | 89% | 127,673 | 200 | 94% | 118,842 | 84 |
+| full | 100% | — | — | 100% | — | — |
+
+At 180 days, **2,865 open supplychain lines (11%) and 576 open PR lines (6%) were
+already outside the window**. The Saturday full reload was always what made the
+data correct; the window only decides how fresh things are between Saturdays.
+
+Both now run on **90 days**. For `purchase_requisation` that is free — 93% against
+180's 94%, because the 91–180 day band holds only 89 lines — at 44% less data.
+For `supplychain` it trades 4 points of mid-week freshness for 35% less data.
+Correctness is unchanged either way, because it never came from the window.
+
+The weekly full reload also remains the only thing that removes rows deleted
+upstream, which an incremental merge cannot do.
 
 ### Bucket grouping — why the incremental runs were slow
 
