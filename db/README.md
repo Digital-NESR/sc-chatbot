@@ -119,6 +119,42 @@ acquire — a proxy, not a guarantee. That is why the weekly full reload exists
 upstream, which an incremental merge cannot do, so every incremental table needs
 it regardless of how good its date column is.
 
+### Bucket grouping — why the incremental runs were slow
+
+`bucket_chars` is base **10**: `bucket_chars = 3` means 1,000 buckets, addressed
+by the last 3 digits of `bucket_col`, and `Range Plan` historically issued **one
+DAX call per bucket**.
+
+That count is sized for the FULL table. On a narrow incremental window each
+bucket holds almost nothing, so the run paid 1,000 round trips to fetch ~128
+rows each. The time was going into round trips, not data — which is why
+shrinking the window barely helped.
+
+The planner now packs buckets back up to a known-safe payload and sends them in
+one call with `RIGHT(key, n) IN {...}`:
+
+| Table | Buckets | Rows/bucket (incr) | Group size | Calls before | Calls after |
+| --- | --- | --- | --- | --- | --- |
+| `supplychain` | 1,000 | 128 | 5 | 1,000 | 200 |
+| `purchase_requisation` | 1,000 | 119 | 12 | 1,000 | 84 |
+| `material_master_data` | 100 | 21 | 100 | 100 | 1 |
+| | | | | **2,100** | **285** |
+
+**On a full reload the group size computes to 1**, so the Saturday path is
+byte-for-byte what it has always been. The same default applies when a caller
+sends no `groupSize` at all, so a parent mid-run keeps working across a deploy.
+
+`TARGET_CELLS_PER_CALL` is 80,000, and it is the one constant here that must stay
+conservative, because Power BI returns **fewer rows without erroring** past 15 MB.
+It is not a guess: the Saturday reload of `supplychain` already fetches 735 rows
+× 108 columns (79,415 cells) per call intact. Measured directly, a grouped call
+of 717 rows × 108 columns returned all 717 rows at **3.4 MB — 22.6% of the cap**,
+so the budget holds even if another table's cells are twice as heavy.
+
+Verified before deploy: five buckets counted individually (220 + 134 + 150 + 103
++ 110 = 717) match the grouped filter exactly (717), and a real fetch of that
+group returned 717 rows.
+
 ### `static` is not the same as disabled
 
 Static tables keep `enabled = true` on purpose. Setting `enabled = false` would
