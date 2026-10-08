@@ -76,12 +76,43 @@ To change a description: edit `column_comments.json`, load it into
 | Data Loader | `0 9-16 * * *` | Plans each run from the day's row counts; uses ~3 hours on a weekday, ~7 on Saturday |
 | Vector reconcile | `30 15 * * *` | Re-embeds anything the 3-day refresh missed |
 
-`supplychain` and `purchase_requisation` load incrementally on a 180-day
-activity window and reload in full every Saturday (`full_reload_dow = 6`).
-Neither table has a last-changed column, so the window is an OR-chain over every
-activity date the document carries — which is a proxy, not a guarantee, and the
-weekly full reload is what makes it safe. It also removes rows deleted upstream,
-which an incremental merge cannot do.
+### Load modes
+
+`load_config.load_mode` takes three values:
+
+| Mode | Tables | Behaviour |
+| --- | --- | --- |
+| `full` | 7 | Extract everything, swap staging into place |
+| `incremental` | `material_master_data`, `purchase_requisation`, `supplychain` | Extract a 180-day window, merge on `key_cols`, full reload on Saturday |
+| `static` | `mat_group_description`, `account_classification_mapping` | Never extracted at all |
+
+**The window means different things per table, and the difference matters.**
+
+`material_master_data` has a real SAP `Last_Change`, populated on **every one of
+its 308,940 rows**, alongside `Created_On` — also 100% populated. Its window is
+exact, not a guess. The 180-day window covers 59,253 of 308,942 rows, so the
+extract drops by **81%**: about 9.9M cells down to 1.9M, roughly five minutes off
+every run.
+
+`supplychain` and `purchase_requisation` have no last-changed column at all, so
+"recently active" there is an OR-chain over every activity date the document can
+acquire — a proxy, not a guarantee. That is why the weekly full reload exists
+(`full_reload_dow = 6`). It is also the only thing that removes rows deleted
+upstream, which an incremental merge cannot do, so every incremental table needs
+it regardless of how good its date column is.
+
+### `static` is not the same as disabled
+
+Static tables keep `enabled = true` on purpose. Setting `enabled = false` would
+also drop them out of the `/admin` column dictionary, which reads
+`load_config WHERE enabled`. With `load_mode = 'static'` they keep their column
+comments and stay editable, but are skipped by both `Build Count Query` and
+`Build Range List` in the loader, so they cost no API call and are never
+published.
+
+**Those two skips must stay in step.** If a table appeared in the expected counts
+but not in the extraction plan, `publish_all` would be handed a count for rows
+no range ever staged.
 
 ## The `track` schema (Track My Request)
 
