@@ -134,10 +134,38 @@ At 180 days, **2,865 open supplychain lines (11%) and 576 open PR lines (6%) wer
 already outside the window**. The Saturday full reload was always what made the
 data correct; the window only decides how fresh things are between Saturdays.
 
-Both now run on **90 days**. For `purchase_requisation` that is free — 93% against
-180's 94%, because the 91–180 day band holds only 89 lines — at 44% less data.
-For `supplychain` it trades 4 points of mid-week freshness for 35% less data.
-Correctness is unchanged either way, because it never came from the window.
+Both now run on **20 days** (42,651 and 21,973 rows).
+
+### Why the coverage column above overstates the risk
+
+Nothing is ever lost by a short window. The merge is `DELETE` on `key_cols` then
+`INSERT`; **rows outside the window are not touched**, so history accumulates and
+every past load stays. A narrow window risks rows being *stale*, never missing.
+
+And most changes pull their own row back into the window. Every lifecycle
+transition Track My Request reports on moves a tracked date:
+
+| Change | Date it moves | Caught at any window? |
+| --- | --- | --- |
+| PR converted to PO | `Purchase_Order_Date` | yes |
+| PR released | `PR_Release_Date_(Final)` | yes |
+| PO released | `PO_RELEASE_DATE` | yes |
+| Goods received | `GR_POSTING_DATE` | yes |
+| Invoice posted | none | **no** |
+| Deletion flag set | none | **no** |
+| Quantity or price amended | none | **no** |
+
+So the table above measures the wrong thing for the top half: those rows re-enter
+the window by themselves no matter how old they are. It measures the right thing
+only for the bottom half — and those are missed at **every** window, 180 included,
+which is why the Saturday reload is the real mechanism.
+
+The residual exposure at 20 days is therefore: an invoice posting, deletion or
+silent amendment against a document with no tracked activity in 20 days stays
+stale until Saturday. That was already true at 180 days for 11% of open POs; it
+is a difference of degree, not of kind.
+
+Correctness is unchanged, because it never came from the window.
 
 The weekly full reload also remains the only thing that removes rows deleted
 upstream, which an incremental merge cannot do.
