@@ -90,9 +90,27 @@ To change a description: edit `column_comments.json`, load it into
 
 `material_master_data` has a real SAP `Last_Change`, populated on **every one of
 its 308,940 rows**, alongside `Created_On` — also 100% populated. Its window is
-exact, not a guess. The 180-day window covers 59,253 of 308,942 rows, so the
-extract drops by **81%**: about 9.9M cells down to 1.9M, roughly five minutes off
-every run.
+exact, not a guess, so it needs no margin for a proxy being wrong and runs on
+**14 days**:
+
+| Window | Rows | % of table |
+| --- | --- | --- |
+| 5 days | 997 | 0.3% |
+| **14 days** | **2,147** | **0.7%** |
+| 30 days | 3,938 | 1.3% |
+| 180 days | 59,253 | 19.2% |
+| full | 308,942 | 100% |
+
+180 was inherited from the two proxy-date tables and was badly oversized: a bulk
+update 30–60 days ago sits inside it, so every run dragged ~57,000 unchanged
+rows along. At 14 days the extract is 2,147 rows — **99.3% less than a full
+load**.
+
+The floor is not arbitrary. `Select Changed Materials` re-embeds anything with
+`last_change >= now() - interval '3 days'`, so the import window must stay
+comfortably above 3 days or the vector DB would be asked to re-embed rows the
+import had not refreshed. 14 clears it by 11 days and tolerates a two-week
+outage; 5 would also work and costs about one second less.
 
 `supplychain` and `purchase_requisation` have no last-changed column at all, so
 "recently active" there is an OR-chain over every activity date the document can
