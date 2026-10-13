@@ -382,6 +382,9 @@ should be checked against `SELECT DISTINCT country` first.
 
 ## Bucket skew: when a bucket column cannot partition a table
 
+**Resolved.** See below — the table was never a million rows; the extract was
+asking for the wrong grain.
+
 `release_strategy` would not load whole, and the reason generalises.
 
 Bucketing takes `RIGHT(bucket_col, n)`, so the finest partition a table can have
@@ -449,3 +452,40 @@ been refused was reported as freshly loaded. That is what hid the bug above.
 The view now takes the last genuine swap or merge for `last_loaded_at`, and
 exposes `last_attempt_status` separately, so a table that is being extracted but
 refused is visible as exactly that.
+
+## release_strategy: the fix was the grain, not the bucket
+
+Two bucket columns were tried and both stalled near the same ceiling. The
+diagnosis that settled it:
+
+| | |
+| --- | --- |
+| Total rows | 1,035,928 |
+| Distinct approvers | 258 |
+| Distinct `RIGHT(Approver,3)` | 232 |
+| Distinct `RIGHT(Approver,4)` | 256 |
+| **Largest single approver** | **84,825 rows** |
+
+One approver held 84,825 rows, all sharing the same value, so no `bucket_chars`
+could ever split them — the same shape as the 63,223 blank plants. Bucketing
+cannot partition below the cardinality of its column.
+
+But the matrix was never a million rows. It is exploded across `Plant` and
+`Document_Type`:
+
+| Grain | Rows |
+| --- | --- |
+| everything | 1,035,928 |
+| + plant | 128,070 |
+| + document type | 75,347 |
+| **strategy → step → approver, email, purchasing group, spend band** | **22,494** |
+| strategy → step → approver | 9,857 |
+
+A purchase order carries its own `release_strategy`, so plant and document type
+are only the determinants of WHICH strategy applies — never needed to answer who
+must approve a given document. Dropping them collapses the table 98%, and the
+bucketing problem disappears rather than being worked around.
+
+`track.po_line` now exposes `release_strategy`, which is the join. Without it
+there was no path from a PO to its approval chain and the agent looped to its
+iteration limit. 494 of 498 PO strategies match a chain.
