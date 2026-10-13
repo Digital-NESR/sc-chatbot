@@ -407,3 +407,20 @@ Two things to take from this:
 
 The guard did its job throughout: every short extraction was refused rather than
 published, so nothing incomplete ever reached the agent.
+
+## receipt_state on a PO that was never approved
+
+`po_line.receipt_state` used to fall through to **'Closed, nothing received'**
+for any line with nothing received and nothing outstanding — including purchase
+orders still awaiting approval, where nothing *could* have been received.
+"Closed" reads as an outcome; those have not begun. It affected 2,061 Under
+Release and 368 Draft lines.
+
+There is now a `'Not started'` branch, placed **after** the real receipt checks
+so a line that genuinely has a receipt keeps its true state even when the PO is
+unreleased. That combination is not hypothetical — 6,249 Draft lines show
+`Fully Received` — and it is an anomaly worth surfacing, not one to hide.
+
+The agent is also told to match columns to the question: an approval question
+shows release state, who is holding it and how long, and **no receipt or
+delivery columns at all**, since nothing can be received before approval.
