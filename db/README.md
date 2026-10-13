@@ -424,3 +424,28 @@ unreleased. That combination is not hypothetical — 6,249 Draft lines show
 The agent is also told to match columns to the question: an approval question
 shows release state, who is holding it and how long, and **no receipt or
 delivery columns at all**, since nothing can be received before approval.
+
+## Expected counts must be merged from EVERY dataset
+
+When the loader became multi-dataset, `Build Range List` was updated to merge
+`$('Fetch Expected Counts').all()` — one item per source model — but
+`Swap Staging To Live` was left reading `.first()`.
+
+The result was quiet and expensive. Extraction planned correctly for all 19
+tables and staged them every day, but the publish step only ever saw the first
+dataset's counts, so every table from every other model recorded
+**`no expected count`** and was never published. Five tables sat on data from a
+one-off manual load for five days while being re-extracted daily and discarded.
+
+Both nodes now merge the same way, and the note on `Swap Staging To Live` says
+so. If you add a dataset, check both.
+
+### data_freshness only counts a swap or a merge as a load
+
+It originally accepted any status that was not `SKIPPED%` or
+`no staging table`, which let `no expected count` through — so a table that had
+been refused was reported as freshly loaded. That is what hid the bug above.
+
+The view now takes the last genuine swap or merge for `last_loaded_at`, and
+exposes `last_attempt_status` separately, so a table that is being extracted but
+refused is visible as exactly that.
