@@ -489,3 +489,31 @@ bucketing problem disappears rather than being worked around.
 `track.po_line` now exposes `release_strategy`, which is the join. Without it
 there was no path from a PO to its approval chain and the agent looped to its
 iteration limit. 494 of 498 PO strategies match a chain.
+
+## "GRN'ed", not "received"
+
+"Received" was carrying three different meanings at once: goods physically
+arriving, a goods receipt being posted in SAP, and a service entry sheet being
+accepted. What the data actually measures is the **posting** — `receipt_state`
+is derived from `delv_qty` and `still_delv_qty`, which move when a GRN is posted,
+not when anything reaches the requester.
+
+The states now say so:
+
+| Was | Now |
+| --- | --- |
+| Fully Received | **Fully GRN'ed** |
+| Partially Received | **Partially GRN'ed** |
+| Awaiting Receipt | **No GRN'ed** |
+| Not started | **PO unapproved** |
+| Closed, nothing received | **Closed, no GRN** |
+
+`overall_stage` follows the same vocabulary, and the comparisons inside its
+CASE were renamed with the labels they test — they are in the same `create_sql`,
+so a partial rename would have silently broken the stage mapping rather than
+erroring.
+
+The agent is told to use "GRN'ed" or "a GRN has been posted", and to avoid
+"received", "arrived" or "delivered" unless the user says them first, because a
+GRN on a service line means a service entry sheet was accepted and nothing
+physical arrived at all.
