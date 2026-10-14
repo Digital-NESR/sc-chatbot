@@ -18,7 +18,9 @@ type Data = {
   spendToday?: number; spend7?: number; spendWindow?: number;
   byDay?: { date: string; usd: number }[];
   models?: { model: string; usd: number; inTok: number; outTok: number; cacheReadTok: number }[];
-  topKeys?: { key: string; tokens: number }[];
+  byKey?: { id: string; name: string; named: boolean; tokens: number; usd: number }[];
+  byWorkspace?: { id: string; name: string; usd: number }[];
+  unattributedUsd?: number;
   webSearches?: number;
   balance?: {
     toppedUp: number; spentSince: number; remaining: number | null; perDay: number;
@@ -324,25 +326,91 @@ export default function UsagePage() {
         </div>
       )}
 
-      {/* By key */}
-      {data?.ok && !!data.topKeys?.length && (
+      {/* By API key — this is where HSE bot, Track My Request etc. appear */}
+      {data?.ok && !!data.byKey?.length && (
         <div className="rounded-lg border border-slate-200 bg-white p-5">
-          <h3 className="font-semibold text-slate-800 mb-1">By API key</h3>
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="font-semibold text-slate-800">By API key — spend per bot</h3>
+            <span className="text-[11px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+              cost apportioned
+            </span>
+          </div>
           <p className="text-sm text-slate-500 mb-3">
-            Tokens, not cost — the cost endpoint cannot be grouped by key. Give each workflow its own key to split
-            spend per agent.
+            The cost endpoint cannot group by key, so each billed pool is split by its own tokens: cost is known per
+            model and token type, tokens are known per model, token type <em>and</em> key. Exact to rounding for token
+            costs. Anything that carries no key — web search, code execution — is listed separately below rather than
+            spread across bots.
           </p>
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
-                <th className="py-2">Key</th><th className="text-right">Tokens</th>
+                <th className="py-2">Key</th>
+                <th className="text-right">Cost</th>
+                <th className="text-right">Share</th>
+                <th className="text-right">Tokens</th>
               </tr>
             </thead>
             <tbody>
-              {data.topKeys.map((k) => (
-                <tr key={k.key} className="border-t border-slate-100">
-                  <td className="py-2 font-mono text-xs text-slate-600">{k.key}</td>
-                  <td className="text-right tabular-nums text-slate-500">{tok(k.tokens)}</td>
+              {data.byKey.map((k) => {
+                const total = data.byKey!.reduce((a, x) => a + x.usd, 0);
+                const pct = total > 0 ? (k.usd / total) * 100 : 0;
+                return (
+                  <tr key={k.id} className="border-t border-slate-100">
+                    <td className="py-2">
+                      <span className={k.named ? 'font-medium text-slate-700' : 'font-mono text-xs text-slate-500'}>
+                        {k.name}
+                      </span>
+                      {k.named && <span className="ml-2 font-mono text-[11px] text-slate-400">{k.id}</span>}
+                    </td>
+                    <td className="text-right tabular-nums">{usd(k.usd)}</td>
+                    <td className="text-right tabular-nums text-slate-500 w-28">
+                      <div className="flex items-center justify-end gap-2">
+                        <div className="h-1.5 w-16 bg-slate-100 rounded overflow-hidden">
+                          <div className="h-full bg-[#307c4c]" style={{ width: `${Math.min(100, pct)}%` }} />
+                        </div>
+                        {pct.toFixed(0)}%
+                      </div>
+                    </td>
+                    <td className="text-right tabular-nums text-slate-500">{tok(k.tokens)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {!!data.unattributedUsd && (
+            <p className="mt-3 text-sm text-slate-500">
+              {usd(data.unattributedUsd)} not attributable to a key (server tools, or cost with no matching token
+              usage). It is included in the totals above the chart, not in this table.
+            </p>
+          )}
+          {data.byKey.some((k) => !k.named) && (
+            <p className="mt-2 text-xs text-slate-400">
+              Unnamed rows are keys the Admin API did not return — usually archived, or belonging to another
+              organisation. Name a key in Console → API keys and it appears here on the next refresh.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* By workspace — real cost, not apportioned */}
+      {data?.ok && (data.byWorkspace?.length ?? 0) > 1 && (
+        <div className="rounded-lg border border-slate-200 bg-white p-5">
+          <h3 className="font-semibold text-slate-800 mb-1">By workspace</h3>
+          <p className="text-sm text-slate-500 mb-3">
+            Billed cost straight from Anthropic, grouped by workspace — no apportioning involved. If each bot has its
+            own workspace, these are exact figures.
+          </p>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
+                <th className="py-2">Workspace</th><th className="text-right">Cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.byWorkspace!.map((w) => (
+                <tr key={w.id} className="border-t border-slate-100">
+                  <td className="py-2 font-medium text-slate-700">{w.name}</td>
+                  <td className="text-right tabular-nums">{usd(w.usd)}</td>
                 </tr>
               ))}
             </tbody>

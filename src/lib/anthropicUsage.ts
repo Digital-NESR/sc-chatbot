@@ -21,15 +21,40 @@
 const BASE = 'https://api.anthropic.com/v1/organizations';
 const VERSION = '2023-06-01';
 
+/**
+ * The five token_type values are the join key between cost and usage:
+ * cost_report grouped by description reports USD per (model, token_type),
+ * and usage_report grouped by model + api_key_id reports tokens per
+ * (model, key, token_type). That lets cost be apportioned to a key by its
+ * share of the tokens that were actually billed, rather than guessed at.
+ */
+export type TokenType =
+  | 'uncached_input_tokens'
+  | 'cache_read_input_tokens'
+  | 'output_tokens'
+  | 'cache_creation.ephemeral_1h_input_tokens'
+  | 'cache_creation.ephemeral_5m_input_tokens';
+
 export type CostResult = {
   amount: string; // cents, decimal string
   currency: string;
   description: string | null;
   model: string | null;
   cost_type: 'code_execution' | 'session_usage' | 'tokens' | 'web_search' | null;
+  token_type: TokenType | null;
   service_tier: 'batch' | 'standard' | null;
   workspace_id: string | null;
 };
+
+export type ApiKeyInfo = {
+  id: string;
+  name: string;
+  status: 'active' | 'archived' | 'expired' | 'inactive';
+  scope?: { type: 'workspace'; workspace_id: string } | { type: 'organization' };
+  workspace_id: string | null;
+};
+
+export type WorkspaceInfo = { id: string; name: string };
 
 export type UsageResult = {
   model: string | null;
@@ -113,6 +138,59 @@ export async function getCost(startingAt: string, endingAt: string) {
   const p = new URLSearchParams({ starting_at: startingAt, ending_at: endingAt, bucket_width: '1d', limit: '31' });
   p.append('group_by[]', 'description');
   return fetchAll<CostResult>('cost_report', p);
+}
+
+/**
+ * Cost per workspace. A separate call because group_by on cost_report
+ * accepts only 'description' and 'workspace_id', and description grouping
+ * is what carries model and token_type. This one is REAL cost per
+ * workspace, not apportioned.
+ */
+export async function getCostByWorkspace(startingAt: string, endingAt: string) {
+  const p = new URLSearchParams({ starting_at: startingAt, ending_at: endingAt, bucket_width: '1d', limit: '31' });
+  p.append('group_by[]', 'workspace_id');
+  return fetchAll<CostResult>('cost_report', p);
+}
+
+/**
+ * Names for the opaque ids the usage report returns. Paginated with
+ * after_id rather than the next_page cursor the reporting endpoints use.
+ */
+async function listAll<T extends { id: string }>(path: string, extra?: Record<string, string>): Promise<T[]> {
+  const key = adminKey();
+  const out: T[] = [];
+  let after: string | null = null;
+
+  for (let i = 0; i < 20; i++) {
+    const q = new URLSearchParams({ limit: '1000', ...(extra ?? {}) });
+    if (after) q.set('after_id', after);
+
+    const res = await fetch(`${BASE}/${path}?${q.toString()}`, {
+      headers: {
+        'x-api-key': key,
+        'anthropic-version': VERSION,
+        'User-Agent': 'NESR-SupplyChainAI/1.0 (admin usage dashboard)',
+      },
+      cache: 'no-store',
+    });
+    // A naming lookup must never take the whole dashboard down: on failure
+    // the caller falls back to showing raw ids.
+    if (!res.ok) return out;
+
+    const json = (await res.json()) as { data: T[]; has_more: boolean; last_id: string | null };
+    out.push(...(json.data || []));
+    if (!json.has_more || !json.last_id) break;
+    after = json.last_id;
+  }
+  return out;
+}
+
+export function getApiKeys() {
+  return listAll<ApiKeyInfo>('api_keys');
+}
+
+export function getWorkspaces() {
+  return listAll<WorkspaceInfo>('workspaces');
 }
 
 export async function getUsage(startingAt: string, endingAt: string, bucket: '1d' | '1h') {
