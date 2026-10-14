@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Track My Request Evaluation</title>
+<style>
+  :root{
+    --bg:#f7f6f3; --card:#ffffff; --ink:#1a1a18; --mute:#6b6a65; --line:#e3e1dc;
+    --pass:#1a7f4f; --pass-bg:#e4f3eb; --part:#9a6b12; --part-bg:#fbf0d9;
+    --fail:#b3261e; --fail-bg:#fbe6e4; --accent:#2d5f8a; --code:#f0eee9;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#17171a; --card:#1f1f23; --ink:#eceae5; --mute:#9b9a94; --line:#33333a;
+      --pass:#5fcf96; --pass-bg:#16362a; --part:#e0b254; --part-bg:#3a2f14;
+      --fail:#f0867c; --fail-bg:#3c1f1c; --accent:#7fb3e0; --code:#2a2a30;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#17171a; --card:#1f1f23; --ink:#eceae5; --mute:#9b9a94; --line:#33333a;
+    --pass:#5fcf96; --pass-bg:#16362a; --part:#e0b254; --part-bg:#3a2f14;
+    --fail:#f0867c; --fail-bg:#3c1f1c; --accent:#7fb3e0; --code:#2a2a30;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:900px; margin:0 auto; padding:48px 16px 96px}
+  header{margin-bottom:36px}
+  h1{font-size:clamp(26px,4.2vw,38px); line-height:1.15; margin:0 0 10px; letter-spacing:-.02em}
+  .sub{color:var(--mute); font-size:15px; margin:0}
+  h2{font-size:22px; margin:52px 0 14px; letter-spacing:-.01em; padding-bottom:8px; border-bottom:1px solid var(--line)}
+  h3{font-size:17px; margin:30px 0 10px; letter-spacing:-.005em}
+  p{margin:0 0 14px}
+  a{color:var(--accent)}
+  code{background:var(--code); padding:.12em .38em; border-radius:4px;
+       font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .lede{font-size:17px; color:var(--mute)}
+
+  .stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(118px,1fr)); gap:10px; margin:24px 0 8px}
+  .stat{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px}
+  .stat b{display:block; font-size:25px; line-height:1.1; letter-spacing:-.02em}
+  .stat span{display:block; font-size:12px; color:var(--mute); margin-top:4px; text-transform:uppercase; letter-spacing:.05em}
+  .stat.p b{color:var(--pass)} .stat.a b{color:var(--part)} .stat.f b{color:var(--fail)}
+
+  .scorebar{display:flex; height:12px; border-radius:99px; overflow:hidden; margin:20px 0 6px; border:1px solid var(--line)}
+  .scorebar i{display:block}
+  .scorebar .sp{background:var(--pass); flex:21}
+  .scorebar .sa{background:var(--part); flex:5}
+  .scorebar .sf{background:var(--fail); flex:6}
+  .legend{display:flex; gap:18px; flex-wrap:wrap; font-size:13px; color:var(--mute); margin-bottom:8px}
+  .legend i{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:6px}
+
+  .tbl{background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden; margin:16px 0 22px}
+  .scroll{overflow-x:auto}
+  table{border-collapse:collapse; width:100%; font-size:14.5px; min-width:480px}
+  th{text-align:left; font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.05em;
+     color:var(--mute); padding:11px 14px; border-bottom:1px solid var(--line); white-space:nowrap}
+  td{padding:11px 14px; border-bottom:1px solid var(--line); vertical-align:top}
+  tr:last-child td{border-bottom:0}
+  td.q{font-variant-numeric:tabular-nums; color:var(--mute); white-space:nowrap; font-weight:600}
+  td.n{font-variant-numeric:tabular-nums; white-space:nowrap}
+
+  .pill{display:inline-block; font-size:11.5px; font-weight:700; text-transform:uppercase;
+        letter-spacing:.05em; padding:3px 9px; border-radius:99px; white-space:nowrap}
+  .pass{background:var(--pass-bg); color:var(--pass)}
+  .partial{background:var(--part-bg); color:var(--part)}
+  .fail{background:var(--fail-bg); color:var(--fail)}
+
+  .note{background:var(--card); border:1px solid var(--line); border-left:3px solid var(--accent);
+        border-radius:0 10px 10px 0; padding:14px 18px; margin:18px 0}
+  .note.bad{border-left-color:var(--fail)}
+  .note.good{border-left-color:var(--pass)}
+  .note p:last-child{margin-bottom:0}
+  .note strong{font-weight:650}
+
+  ul,ol{margin:0 0 14px; padding-left:22px}
+  li{margin-bottom:7px}
+  blockquote{margin:0 0 14px; padding-left:14px; border-left:3px solid var(--line); color:var(--mute); font-style:italic}
+  .files{font-size:13.5px; color:var(--mute)}
+  footer{margin-top:60px; padding-top:20px; border-top:1px solid var(--line); color:var(--mute); font-size:13px}
+  @media (max-width:560px){ .wrap{padding:28px 16px 64px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Track My Request — evaluation run</h1>
+  <p class="sub">32 end-user questions · live n8n webhook · 14 October 2026</p>
+</header>
+
+<p class="lede">Every question was put through the live Track My Request webhook in its own
+fresh session, three at a time. Every answer was then checked against SQL run directly
+against <code>materials_db</code> — not against my own expectations.</p>
+
+<div class="stats">
+  <div class="stat p"><b>21</b><span>Pass</span></div>
+  <div class="stat a"><b>5</b><span>Partial</span></div>
+  <div class="stat f"><b>6</b><span>Fail</span></div>
+  <div class="stat"><b>30s</b><span>Median</span></div>
+  <div class="stat"><b>16m</b><span>Total</span></div>
+</div>
+
+<div class="scorebar"><i class="sp"></i><i class="sa"></i><i class="sf"></i></div>
+<div class="legend">
+  <span><i style="background:var(--pass)"></i>21 pass</span>
+  <span><i style="background:var(--part)"></i>5 partial</span>
+  <span><i style="background:var(--fail)"></i>6 fail</span>
+</div>
+
+<div class="note good">
+  <p><strong>The headline:</strong> every trap question passed, and every failure is
+  mechanical — a <code>LIMIT</code> clause reported as a count, or the agent running out of
+  iterations. Nothing in this run shows the agent misreading the business data.
+  All six failures are fixable in the system prompt.</p>
+</div>
+
+<p class="files">Raw data: <code>eval/questions.json</code> · <code>eval/answers.json</code> ·
+<code>eval/ground_truth.json</code> · <code>eval/verify.json</code></p>
+
+<h2>Score by tier</h2>
+<div class="tbl"><div class="scroll"><table>
+<thead><tr><th>Tier</th><th>Pass</th><th>Partial</th><th>Fail</th></tr></thead>
+<tbody>
+<tr><td>1 · Where is my thing <span style="color:var(--mute)">(Q1–5)</span></td><td class="n">4</td><td class="n">1</td><td class="n">0</td></tr>
+<tr><td>2 · Why is it taking so long <span style="color:var(--mute)">(Q6–11)</span></td><td class="n">3</td><td class="n">2</td><td class="n">1</td></tr>
+<tr><td>3 · When will I get it <span style="color:var(--mute)">(Q12–16)</span></td><td class="n">4</td><td class="n">0</td><td class="n">1</td></tr>
+<tr><td>4 · Has it been paid <span style="color:var(--mute)">(Q17–20)</span></td><td class="n">1</td><td class="n">2</td><td class="n">1</td></tr>
+<tr><td><strong>5 · Awkward / trap questions</strong> <span style="color:var(--mute)">(Q21–26)</span></td><td class="n"><strong>6</strong></td><td class="n">0</td><td class="n">0</td></tr>
+<tr><td>6 · Harder, multi-step <span style="color:var(--mute)">(Q27–32)</span></td><td class="n">3</td><td class="n">0</td><td class="n">3</td></tr>
+</tbody></table></div></div>
+
+<h2>Tier 1 — Where is my thing</h2>
+<div class="tbl"><div class="scroll"><table>
+<thead><tr><th>Q</th><th>Question</th><th>Expected</th><th>Got</th><th>Verdict</th></tr></thead>
+<tbody>
+<tr><td class="q">1</td><td>Where is PR 1005026000?</td><td>Fully GRN'ed via PO 5190034063, 2 lines</td><td>Correct, GRN 28 Jul 2025</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">2</td><td>Has my order 5190034063 arrived yet?</td><td>Fully GRN'ed, but it's a <strong>service line</strong> — nothing physical arrived</td><td>Said GRN posted <em>and</em> flagged it as a service entry sheet</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">3</td><td>What's happening with PO 5150009248?</td><td>Under Release, 12 lines, AED 589,596.77, with 0064</td><td>Correct on all counts</td><td><span class="pill partial">partial</span></td></tr>
+<tr><td class="q">4</td><td>Did my request go through?</td><td>Must ask for an identifier</td><td>Asked for a PR or PO number</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">5</td><td>Is there a PO for PR 1005026000 yet?</td><td>Yes — 5190034063, created 1 Jun 2025</td><td>Correct</td><td><span class="pill pass">pass</span></td></tr>
+</tbody></table></div></div>
+
+<div class="note"><p><strong>Q3 partial.</strong> The answer included a
+<em>Receipt State: PO unapproved</em> column. The prompt's own rule says not to show GRN
+columns on an approval-stage document. Not wrong — just noise the prompt says to suppress.</p></div>
+
+<h2>Tier 2 — Why is it taking so long</h2>
+<div class="tbl"><div class="scroll"><table>
+<thead><tr><th>Q</th><th>Expected</th><th>Got</th><th>Verdict</th></tr></thead>
+<tbody>
+<tr><td class="q">6</td><td>Waiting with 0064, 3 days</td><td>Right answer, wrong presentation</td><td><span class="pill partial">partial</span></td></tr>
+<tr><td class="q">7</td><td>Chase 0064 (Bashar Al Arar is the <em>buyer</em>, not the approver)</td><td>Right, but self-contradictory phrasing</td><td><span class="pill partial">partial</span></td></tr>
+<tr><td class="q">8</td><td>PR signed 26 May 2025, nobody holding it</td><td>Correct — said it is not sitting with anyone</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">9</td><td><strong>16,191 PR lines</strong> approved with no PO</td><td>“50 PR lines”</td><td><span class="pill fail">fail</span></td></tr>
+<tr><td class="q">10</td><td>3 days is normal, not stuck</td><td>Correct and well-judged</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">11</td><td>493 PRs / 1,972 lines; 959 POs / 3,187 lines</td><td><strong>493 / 1,972 and 959 / 3,187 — exact</strong></td><td><span class="pill pass">pass</span></td></tr>
+</tbody></table></div></div>
+
+<p><strong>Q6.</strong> Printed twelve identical rows — same PO, same approver, same 3 days —
+against the prompt's explicit <em>“when every row of a column is the same value, say it
+once”</em>. It also used raw column names as table headers (<code>po_number</code>,
+<code>po_item</code>, <code>waiting_with</code>) instead of readable ones. And it answered
+<em>who</em> rather than <em>why</em>, which is what was asked.</p>
+
+<p><strong>Q7.</strong> Said the PO was <em>“created 10 October 2026, but never submitted for
+approval”</em> — while simultaneously saying it is sitting with an approver. Both statements
+come from real columns (<code>submitted_on</code> is null) but together they read as a
+contradiction to anyone chasing the order.</p>
+
+<div class="note bad"><p><strong>Q9 — first instance of the biggest problem in this run.</strong>
+The agent ran a query with <code>LIMIT 50</code>, got 50 rows back, and reported
+<em>“50 PR lines”</em> as if that were the answer. The true figure is <strong>16,191</strong>.
+Trap 7 in the prompt says <em>“counts come from COUNT(*)”</em> — the agent did not apply it.</p></div>
+
+<h2>Tier 3 — When will I get it</h2>
+<div class="tbl"><div class="scroll"><table>
+<thead><tr><th>Q</th><th>Expected</th><th>Got</th><th>Verdict</th></tr></thead>
+<tbody>
+<tr><td class="q">12</td><td>Delivery date for 5190034063</td><td>Correct</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">13</td><td>4160008900 — part shipped</td><td>Correct, and used the in-transit figure</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">14</td><td>38,400 received, 21,600 in transit of 60,000</td><td><strong>Exact</strong></td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">15</td><td>Yes — 21,600 on the water</td><td>Correct, with supplier name</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">16</td><td><strong>6,680 lines across 1,905 POs</strong> overdue</td><td>“50 open POs”</td><td><span class="pill fail">fail</span></td></tr>
+</tbody></table></div></div>
+
+<h2>Tier 4 — Has it been paid</h2>
+<div class="tbl"><div class="scroll"><table>
+<thead><tr><th>Q</th><th>Expected</th><th>Got</th><th>Verdict</th></tr></thead>
+<tbody>
+<tr><td class="q">17</td><td>Not paid — invoice 8600013484, SAR 3,066.71, overdue</td><td>Correct</td><td><span class="pill partial">partial</span></td></tr>
+<tr><td class="q">18</td><td><strong>24,228 open GR/IR items, 5,546 POs</strong></td><td>Showed 50 oldest, gave no total</td><td><span class="pill partial">partial</span></td></tr>
+<tr><td class="q">19</td><td><strong>356,233 overdue invoices across 209,878 POs</strong></td><td>“50 invoices that are overdue”</td><td><span class="pill fail">fail</span></td></tr>
+<tr><td class="q">20</td><td>Explain how to check payment status</td><td>Clear, correct walkthrough</td><td><span class="pill pass">pass</span></td></tr>
+</tbody></table></div></div>
+
+<div class="note"><p><strong>Q17 / Q19 — a data-semantics problem, not an agent problem.</strong>
+Every unpaid invoice prints its balance as a <strong>negative</strong> number: invoice amount
+<code>3,066.71</code>, payment amount <code>0</code>, balance <code>−3,066.71</code>. That is
+SAP's credit-side sign convention, and <code>payment_state</code> resolves it correctly, but
+showing a user <em>“balance −3,066.71”</em> for an invoice that is fully outstanding is
+confusing. The agent is reporting the column faithfully; the column needs either a documented
+explanation or an <code>abs()</code> in the view.</p></div>
+
+<h2>Tier 5 — Awkward questions (the traps)</h2>
+<div class="note good"><p><strong>All six passed.</strong> This is the most important result
+in the run.</p></div>
+
+<div class="tbl"><div class="scroll"><table>
+<thead><tr><th>Q</th><th>The trap</th><th>What the agent said</th></tr></thead>
+<tbody>
+<tr><td class="q">21</td><td>“0 received on PO 5180004834, so nothing turned up, right?” — the premise is wrong; these are service lines</td><td><em>“Actually, GRNs have been posted… these are service lines”</em> — refused the premise</td></tr>
+<tr><td class="q">22</td><td>“Last thing we ordered from DHL in Iraq” — <code>ILIKE '%DHL%'</code> matches the surname <strong>Alfadhli</strong></td><td>Found supplier <code>0001100142</code> first, answered PO 5290004482 line 120 (20 Oct 2025), <strong>and stated the filter it used</strong>. Verified correct.</td></tr>
+<tr><td class="q">23</td><td>“What is the GRN number for PO 5190034063?” — no material document number exists anywhere</td><td><em>“I don't have a GRN document number… known limitation”</em></td></tr>
+<tr><td class="q">24</td><td>“Where exactly is the shipment right now?” — there is no location data</td><td><em>“I cannot tell you the exact physical location”</em></td></tr>
+<tr><td class="q">25</td><td>“Which PR line turned into which PO line?” — links at document level only</td><td><em>“links at the document level (95.5%), not line by line”</em></td></tr>
+<tr><td class="q">26</td><td>“What have I got outstanding?” — no identity available</td><td>Asked for an identifier, and mentioned Materials AI for the stock half</td></tr>
+</tbody></table></div></div>
+
+<p><strong>Q22 is worth calling out.</strong> The exact mistake that triggered this whole piece
+of work — matching a supplier by text in a description and returning a hotel booking — did not
+recur. The agent resolved the supplier number first and disclosed its method unprompted.</p>
+
+<h2>Tier 6 — Harder, multi-step</h2>
+<div class="tbl"><div class="scroll"><table>
+<thead><tr><th>Q</th><th>Expected</th><th>Got</th><th>Verdict</th></tr></thead>
+<tbody>
+<tr><td class="q">27</td><td>Full approval chain for PO 5150009248 (steps 2A/A8/A9)</td><td><strong>Error in workflow</strong></td><td><span class="pill fail">fail</span></td></tr>
+<tr><td class="q">28</td><td>MKHATTAB: 239 lines, 5 POs, oldest 1,876 days</td><td><strong>239 / 5 / 1,876 — exact</strong></td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">29</td><td><strong>5,923 lines</strong> approved, overdue, not GRN'ed</td><td>“50”</td><td><span class="pill fail">fail</span></td></tr>
+<tr><td class="q">30</td><td>Full history of PR 1005026000</td><td><strong>Error in workflow</strong></td><td><span class="pill fail">fail</span></td></tr>
+<tr><td class="q">31</td><td>3 open GR/IR from supplier 0001100142</td><td>Correct, AED 6,485.46, caught a likely already-clearing line</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">32</td><td>PR top: 5588 / 292 lines. PO top: 16866 / 276 lines</td><td><strong>Both exact</strong></td><td><span class="pill pass">pass</span></td></tr>
+</tbody></table></div></div>
+
+<p><strong>Q32</strong> deserves a note. The headline named 6053 (179 lines, 494-day average)
+and MKHATTAB (239 lines, 1,873-day average) rather than the two approvers holding the most
+lines. The tables underneath are numerically exact. Reading “bottleneck” as <em>who has held
+things longest</em> rather than <em>who holds the most</em> is a defensible call, and it showed
+both.</p>
+
+<h2>The six failures, and what causes them</h2>
+
+<h3>F1 — <code>LIMIT 50</code> reported as a count · Q9, Q16, Q18, Q19, Q29</h3>
+<p>Five of thirty-two answers. The worst case told the user there are <strong>50 overdue
+invoices</strong> when there are <strong>356,233</strong>.</p>
+
+<div class="tbl"><div class="scroll"><table>
+<thead><tr><th>Q</th><th>Said</th><th>Actually</th></tr></thead>
+<tbody>
+<tr><td class="q">9</td><td class="n">50 PR lines</td><td class="n">16,191</td></tr>
+<tr><td class="q">16</td><td class="n">50 open POs</td><td class="n">6,680 lines / 1,905 POs</td></tr>
+<tr><td class="q">18</td><td class="n">50 (implied)</td><td class="n">24,228 items / 5,546 POs</td></tr>
+<tr><td class="q">19</td><td class="n">50 invoices</td><td class="n"><strong>356,233</strong> / 209,878 POs</td></tr>
+<tr><td class="q">29</td><td class="n">50 POs</td><td class="n">5,923 lines</td></tr>
+</tbody></table></div></div>
+
+<p>Hard rule 2 says <em>“always add LIMIT (50 unless asked for more)”</em>. Trap 7 says
+<em>“counts come from COUNT(*)”</em>. The two rules sit in different sections and the agent
+follows the first and forgets the second. Q19's hedge — <em>“50 invoices that are overdue
+(and possibly more)”</em> — shows it half-knew.</p>
+
+<div class="note"><p><strong>Proposed fix.</strong> Merge the two rules into one instruction at
+the point of use: any question phrased as <em>which / how many / is there anything</em> takes
+<strong>two</strong> queries — a <code>COUNT(*)</code> with no LIMIT for the headline, then a
+<code>LIMIT 50</code> sample for the table. State the real total in the first sentence and label
+the table “showing the oldest 50 of N”.</p></div>
+
+<h3>F2 — Max iterations, caused by guessed column names · Q27, Q30</h3>
+<p>Confirmed from the n8n execution trace (execution 25433). The agent's ten iterations on Q30
+went:</p>
+
+<div class="tbl"><div class="scroll"><table>
+<thead><tr><th>#</th><th>What it did</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td class="q">1</td><td><code>SELECT pr_num … request_lifecycle</code></td><td><code>column "pr_num" does not exist</code></td></tr>
+<tr><td class="q">2</td><td><code>SELECT pr_num … pr_waiting_with</code></td><td>same error</td></tr>
+<tr><td class="q">3</td><td><code>SELECT po_num … po_waiting_with</code></td><td><code>column "po_num" does not exist</code></td></tr>
+<tr><td class="q">4</td><td><code>SELECT po_num … goods_receipt</code></td><td>same error</td></tr>
+<tr><td class="q">5</td><td><code>SELECT po_num … invoice</code></td><td>same error</td></tr>
+<tr><td class="q">6</td><td><code>information_schema</code> for <code>request_lifecycle</code></td><td>column list</td></tr>
+<tr><td class="q">7</td><td><strong>the actual answer</strong></td><td>correct rows</td></tr>
+<tr><td class="q">8</td><td><code>information_schema</code> for <code>goods_receipt</code></td><td>column list</td></tr>
+<tr><td class="q">9</td><td>GRN query</td><td>correct rows</td></tr>
+<tr><td class="q">10</td><td><code>information_schema</code> for <code>invoice</code></td><td><strong>limit reached</strong></td></tr>
+</tbody></table></div></div>
+
+<div class="note bad"><p><strong>Five of ten iterations were spent guessing
+<code>pr_num</code> and <code>po_num</code></strong> when the columns are
+<code>pr_number</code> and <code>po_number</code>. Another four were
+<code>information_schema</code> round-trips. One iteration out of ten did real work.</p></div>
+
+<p>The prompt lists all sixteen views and their grain, but not a single column name — it tells
+the agent to go and look them up. At ten iterations, that budget does not survive a question
+that touches four views.</p>
+
+<p><strong>Proposed fix, in order of effort:</strong></p>
+<ol>
+<li>Put the key columns in the prompt: <em>every view keys on <code>pr_number</code>,
+<code>pr_item</code>, <code>po_number</code>, <code>po_item</code> — never <code>pr_num</code>
+or <code>po_num</code>.</em> One line would have saved five iterations.</li>
+<li>Add a compact column dictionary for the six most-used views, so
+<code>information_schema</code> is a fallback rather than the first step.</li>
+<li>Raise max iterations from 10 to 15.</li>
+</ol>
+<p>(1) and (2) are the real fix; (3) alone would just let it waste more.</p>
+
+<h3>F3 — Zero rows arrives as <code>[{"success":true}]</code></h3>
+<p>Visible in the same trace. <code>SELECT … FROM track.pr_waiting_with WHERE pr_number =
+'1005026000'</code> correctly matched nothing — the PR is fully released — and the tool
+returned <code>[{"success":true}]</code>, not an empty array.</p>
+
+<p>Nothing in the prompt says what that means. The agent treated it as an anomaly and spent a
+further iteration probing. <strong>An empty result that does not look empty is exactly the
+shape of error that produces a confidently wrong answer</strong> — this is the same class of
+problem as the <code>\m</code>/<code>\M</code> escapes, which also returned zero rows
+silently.</p>
+
+<div class="note"><p><strong>Proposed fix.</strong> One line in the Traps section:
+<em><code>[{"success":true}]</code> from <code>query_track_db</code> means the query ran and
+matched zero rows. It is an empty result, not an error — go to Trap 1.</em></p></div>
+
+<h3>F4 — Presentation · Q6</h3>
+<p>Twelve identical rows, and raw column names as headers. Both are already covered by the
+prompt; the instruction is just buried mid-section. Worth moving the “say it once” rule into
+the hard rules and adding <em>“table headers are readable English, never raw column
+names.”</em></p>
+
+<h3>F5 — Negative invoice balances · Q17, Q19</h3>
+<p>As above. Either document the sign convention in <code>col_comments</code> so the agent can
+explain it, or wrap <code>invoice_balance</code> in the <code>track.invoice</code> view. I lean
+towards documenting it — flipping the sign would diverge from what the source model and SAP
+both show, and anyone cross-checking would be confused.</p>
+
+<h3>F6 — Receipt column on an unapproved PO · Q3</h3>
+<p>A single instance, and the mildest finding. The rule exists; the agent applied it on Q6 and
+Q7 but not on the general-status question. Probably needs the rule restated for the
+<em>“what's happening with”</em> case specifically.</p>
+
+<h2>What is working</h2>
+<p>Worth stating plainly, because it is most of the run:</p>
+<ul>
+<li><strong>All six trap questions passed.</strong> The service-line trap, the DHL supplier
+trap, and three separate “we do not have that data” questions were all answered correctly,
+including volunteering the limitation rather than guessing.</li>
+<li><strong>Every aggregate that used <code>COUNT(*)</code> was exact.</strong> Q11, Q28 and
+Q32 match ground truth to the row. The data layer is sound; the failures are in how results
+are summarised, not in what is retrieved.</li>
+<li><strong>The agent discloses its method.</strong> Q22 stated the filter it used unprompted,
+which is what makes a wrong filter visible instead of hidden.</li>
+<li><strong>It asks instead of assuming.</strong> Q4 and Q26 both stopped and asked for an
+identifier rather than inventing a scope.</li>
+<li><strong>Response times are usable.</strong> Median 31s, and the two slowest (83s, 61s) were
+both large unbounded-looking list questions — which F1 would also make faster, since a
+<code>COUNT(*)</code> plus 50 rows beats dragging 50 wide rows back for the model to reason
+over.</li>
+</ul>
+
+<h2>Recommended order of work</h2>
+<p>Nothing here has been changed yet — this is the report, as asked.</p>
+<ol>
+<li><strong>F1</strong> — the count rule. Five questions, one of them off by a factor of 7,000.
+Highest value, lowest risk, prompt-only.</li>
+<li><strong>F2</strong> — key column names plus a short column dictionary in the prompt. Turns
+two hard failures into answers.</li>
+<li><strong>F3</strong> — one line documenting <code>[{"success":true}]</code>. Cheap, and it
+closes a silent-wrong-answer path.</li>
+<li><strong>F5</strong> — document the <code>invoice_balance</code> sign convention in
+<code>col_comments</code>.</li>
+<li><strong>F4 / F6</strong> — presentation rules, promoted into the hard rules.</li>
+</ol>
+
+<p>F1–F4 are all edits to the Track My Request system prompt. F5 is a
+<code>col_comments</code> edit, which flows through <code>/admin/columns</code> and survives
+every swap. <strong>No schema or view changes are needed for any of this.</strong></p>
+
+<p>Re-running this same 32-question set after the changes gives a direct before-and-after,
+since <code>eval/ground_truth.json</code> is already measured.</p>
+
+<footer>NESR Supply Chain AI · Track My Request evaluation · 14 October 2026</footer>
+
+</div>
+</body>
+</html>
