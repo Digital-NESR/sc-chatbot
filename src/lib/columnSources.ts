@@ -11,9 +11,16 @@ import { Pool } from 'pg';
  *
  * Both end up as real Postgres COMMENTs, which is what each agent actually
  * reads at query time.
+ *
+ * 'track' is materials_db too, but a separate source on purpose: Track My
+ * Request reads track.* and is forbidden from touching core.*, and the views
+ * rename columns on the way through, so a comment on the core table would not
+ * reach it. Its views are dropped and recreated by every load, which is why
+ * its descriptions live in ai.column_docs and are replayed by
+ * core.rebuild_track_views() - see db/track_column_docs.sql.
  */
 
-export type SourceId = 'materials' | 'sourceguide' | 'sns' | 'catalog';
+export type SourceId = 'materials' | 'track' | 'sourceguide' | 'sns' | 'catalog';
 
 type SourceDef = {
   id: SourceId;
@@ -32,6 +39,31 @@ export const SOURCES: Record<SourceId, SourceDef> = {
     database: process.env.MATERIALS_DB_NAME || 'materials_db',
     storage: 'load_config',
     objects: [], // taken from core.load_config
+  },
+  track: {
+    id: 'track',
+    label: 'Track My Request',
+    database: process.env.MATERIALS_DB_NAME || 'materials_db',
+    storage: 'column_docs',
+    objects: [
+      { schema: 'track', name: 'request_lifecycle' },
+      { schema: 'track', name: 'pr_line' },
+      { schema: 'track', name: 'po_line' },
+      { schema: 'track', name: 'open_pr' },
+      { schema: 'track', name: 'pr_pending_release' },
+      { schema: 'track', name: 'po_draft' },
+      { schema: 'track', name: 'po_pending_release' },
+      { schema: 'track', name: 'po_open' },
+      { schema: 'track', name: 'pr_waiting_with' },
+      { schema: 'track', name: 'po_waiting_with' },
+      { schema: 'track', name: 'goods_receipt' },
+      { schema: 'track', name: 'invoice' },
+      { schema: 'track', name: 'grir_open' },
+      { schema: 'track', name: 'in_transit' },
+      { schema: 'track', name: 'approval_chain' },
+      { schema: 'track', name: 'data_freshness' },
+      { schema: 'track', name: 'column_guide' },
+    ],
   },
   sourceguide: {
     id: 'sourceguide',
@@ -75,7 +107,7 @@ export const SOURCES: Record<SourceId, SourceDef> = {
   },
 };
 
-const ORDER: SourceId[] = ['materials', 'sourceguide', 'catalog', 'sns'];
+const ORDER: SourceId[] = ['materials', 'track', 'sourceguide', 'catalog', 'sns'];
 export const SOURCE_LIST = ORDER.map((id) => SOURCES[id]);
 
 export function isSourceId(v: unknown): v is SourceId {

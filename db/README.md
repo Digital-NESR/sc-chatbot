@@ -517,3 +517,41 @@ The agent is told to use "GRN'ed" or "a GRN has been posted", and to avoid
 "received", "arrived" or "delivered" unless the user says them first, because a
 GRN on a service line means a service entry sheet was accepted and nothing
 physical arrived at all.
+
+
+## The track.* column dictionary
+
+`/admin/columns` documents 472 columns on `core.*`. Track My Request cannot see
+any of them: it reads `track.*` and is forbidden from querying `core.*`, and the
+views rename columns on the way through (`ub_grir.purchasing_doc` becomes
+`grir_open.po_number`), so a comment on the core table would not follow even if
+it could.
+
+Measured before this existed: **16 views, 444 columns, 0 commented.** The agent's
+only recourse was an `information_schema` round-trip per view, and in the 14 Oct
+evaluation that cost four of Q30's ten iterations before it died on
+"Max iterations (10) reached".
+
+Three pieces, in `db/track_column_docs.sql` and `db/track_column_docs_seed.sql`:
+
+- **`ai.column_docs`** holds the descriptions as data. The same table name and
+  shape the other three databases already use, so
+  `src/app/api/admin/columns/route.ts` needed no changes - only a new entry in
+  `src/lib/columnSources.ts`.
+- **`ai.apply_column_docs(schema, name)`** writes them out as real Postgres
+  COMMENTs, which is what the agent reads. `core.rebuild_track_views()` calls it
+  after recreating each view, because **a dropped view takes its COMMENTs with
+  it** and every `publish_all` drops all of them. Same pattern as
+  `core.apply_comments` after a table swap. It is wrapped in its own exception
+  block: failing to document a view must never fail a data load.
+- **`track.column_guide`** exposes the whole dictionary as one queryable view, so
+  the agent asks once for every view it needs instead of once per view.
+
+Edit the text at **/admin/columns -> Track My Request**. A save writes
+`ai.column_docs` and re-applies the COMMENT in the same transaction, so an edit
+is live for the agent on its very next query, and it survives every swap.
+
+Note the two storage modes are not interchangeable. `materials` stores its
+descriptions in `core.load_config.col_comments` because the loader replays them
+on every swap; `track` cannot, because its objects are views that no load_config
+row owns. Both end up as COMMENTs.
