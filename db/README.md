@@ -504,7 +504,7 @@ The states now say so:
 | --- | --- |
 | Fully Received | **Fully GRN'ed** |
 | Partially Received | **Partially GRN'ed** |
-| Awaiting Receipt | **No GRN'ed** |
+| Awaiting Receipt | **Not GRN'ed** |
 | Not started | **PO unapproved** |
 | Closed, nothing received | **Closed, no GRN** |
 
