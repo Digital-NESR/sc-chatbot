@@ -4,6 +4,10 @@
 -- Registered in core.view_defs like the others, so publish_all rebuilds
 -- them after every load. Edit HERE, never with a bare CREATE VIEW.
 -- See db/README.md.
+--
+-- SUPERSEDED IN PART: pr_waiting_with and po_waiting_with are redefined by
+-- db/track_waiting_with_fix.sql, which also drops already-released lines.
+-- Apply that file after this one.
 -- =====================================================================
 
 INSERT INTO core.view_defs (view_name, apply_order, create_sql, note) VALUES
@@ -46,7 +50,9 @@ SELECT
   r.segment,
   r.loaded_at
 FROM core.pr_release r
-WHERE coalesce(r.deletion_indicator,'') = ''
+-- deletion_indicator is a LABEL, not a blank/X flag: 'PO Not Deleted'
+-- / 'PO Deleted' and the PR equivalents. = '' empties the view.
+WHERE r.deletion_indicator NOT IN ('PR Deleted','PO Deleted')
 $v$, 'Requisitions still awaiting approval and the approver holding them. waiting_with is an employee id.'),
 
 ('po_waiting_with', 91, $v$
@@ -73,7 +79,9 @@ SELECT
   r.segment,
   r.loaded_at
 FROM core.po_release r
-WHERE coalesce(r.deletion_indicator,'') = ''
+-- deletion_indicator is a LABEL, not a blank/X flag: 'PO Not Deleted'
+-- / 'PO Deleted' and the PR equivalents. = '' empties the view.
+WHERE r.deletion_indicator NOT IN ('PR Deleted','PO Deleted')
 $v$, 'Purchase orders still awaiting approval and the approver holding them. waiting_with is an employee id.'),
 
 ('invoice', 92, $v$

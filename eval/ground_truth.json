@@ -236,5 +236,14 @@
       "Open": 12725,
       "Paid": 1189
     }
+  ],
+  "waiting_with_after_f10": [
+    {
+      "po_lines": 2329,
+      "pos": 686,
+      "pr_lines": 1249,
+      "prs": 324,
+      "note": "after F10 dropped already-released lines: 858 PO lines/276 POs and 723 PR lines removed. Was 3,187/959 and 1,972/493."
+    }
   ]
 }

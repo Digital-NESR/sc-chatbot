@@ -35,17 +35,17 @@
     "id": "6",
     "tier": "2 Why so long",
     "q": "Why hasn't PO 5150009248 been approved yet?",
-    "secs": 14,
-    "ok": false,
-    "answer": "{\"message\":\"Error in workflow\"}"
+    "secs": 19,
+    "ok": true,
+    "answer": "Good news – **PO 5150009248 has already been approved**. It was fully released on 13 October 2026, three days after it was created on 10 October.\n\nThe order is for 12 service lines (transport and equipment rental) totalling AED 589,596.77 (USD 162,536.97) from supplier 0001103502 in the UAE, for the HQ - NES - UAE plant. All lines are now closed with no GRNs posted, which is expected for service lines where service entry sheets may have been completed or the period ended.\n\n| PO Line | Description | Value (AED) | Release State | Approved On |\n|---------|-------------|-------------|---------------|-------------|\n| 00010 | OCT 26 6X6 Sand Tyre FBT HAZ WT | 25,500 | Released | 2026-10-13 |\n| 00020 | OCT 266X6 Sand Tyre FBT WT | 60,096.77 | Released | 2026-10-13 |\n| 00030 | OCT 26Buffer Driver WT | 10,000 | Released | 2026-10-13 |\n| 00040 | OCT 26Food & Fine WT | 2,000 | Released | 2026-10-13 |\n| 00050 | OCT 26Hiab Truck 7-Ton WT | 25,000 | Released | 2026-10-13 |\n| 00060 | OCT 26Mobile Crane 50T WT | 39,000 | Released | 2026-10-13 |\n| 00070 | OCT 26Mobile Crane 65T WT | 45,000 | Released | 2026-10-13 |\n| 00080 | OCT 26Mobile Crane 80T WT | 58,000 | Released | 2026-10-13 |\n| 00090 | OCT 26WT Pickup (D/C) 4x4 with driver | 100,000 | Released | 2026-10-13 |\n| 00100 | OCT 26WT Pickup 4x4 (D/C)without driver | 160,000 | Released | 2026-10-13 |\n| 00110 | OCT 26PRADO (without driver WT | 10,000 | Released | 2026-10-13 |\n| 00120 | OCT 26Ramp Lowbed sand (for crane) WT | 55,000 | Released | 2026-10-13 |\n\nWould you like to check if any invoices have been posted against this PO, or need help with anything else? 📋"
   },
   "7": {
     "id": "7",
     "tier": "2 Why so long",
     "q": "Who do I need to chase on PO 5150009248?",
-    "secs": 16,
-    "ok": false,
-    "answer": "{\"message\":\"Error in workflow\"}"
+    "secs": 18,
+    "ok": true,
+    "answer": "You don't need to chase anyone – **PO 5150009248 is fully released and closed.** It was approved on 13 October 2026 (four days ago) and all twelve service lines have now been closed with no GRN posted. These are service lines for October 2026 transportation (vehicles, cranes, sand tyres) from PR 1016006411.\n\n| PO Line | Description | Value (AED) | Release State | Receipt State |\n|---------|-------------|-------------|---------------|---------------|\n| 00010 | OCT 26 6X6 Sand Tyre FBT HAZ WT | 25,500 | Released | Closed, no GRN |\n| 00020 | OCT 266X6 Sand Tyre FBT WT | 60,096.77 | Released | Closed, no GRN |\n| 00030 | OCT 26Buffer Driver WT | 10,000 | Released | Closed, no GRN |\n| 00040 | OCT 26Food & Fine WT | 2,000 | Released | Closed, no GRN |\n| 00050 | OCT 26Hiab Truck 7-Ton WT | 25,000 | Released | Closed, no GRN |\n| 00060 | OCT 26Mobile Crane 50T WT | 39,000 | Released | Closed, no GRN |\n| 00070 | OCT 26Mobile Crane 65T WT | 45,000 | Released | Closed, no GRN |\n| 00080 | OCT 26Mobile Crane 80T WT | 58,000 | Released | Closed, no GRN |\n| 00090 | OCT 26WT Pickup (D/C) 4x4 with driver | 100,000 | Released | Closed, no GRN |\n| 00100 | OCT 26WT Pickup 4x4 (D/C)without driver | 160,000 | Released | Closed, no GRN |\n| 00110 | OCT 26PRADO (without driver WT | 10,000 | Released | Closed, no GRN |\n| 00120 | OCT 26Ramp Lowbed sand (for crane) WT | 55,000 | Released | Closed, no GRN |\n\nAll lines are for NESR Energy Services LLC in the UAE, released on 13 October. The PO was closed without service entry sheets being posted, which is typical when services are either cancelled or the billing moves to a different document.\n\nWould you like me to check whether any invoices have been raised against this PO?"
   },
   "9": {
     "id": "9",
@@ -123,17 +123,17 @@
     "id": "25",
     "tier": "5 Awkward",
     "q": "Which PR line turned into which PO line for PR 1005026000?",
-    "secs": 1,
-    "ok": false,
-    "answer": "{\"message\":\"Error in workflow\"}"
+    "secs": 32,
+    "ok": true,
+    "answer": "PR 1005026000 has two lines, and **both PR lines were consolidated into PO 5190034063, line 00010**.\n\n| PR Line | PR Description | PO Number | PO Line | PO Description |\n|---------|----------------|-----------|---------|----------------|\n| 00010 | JUN-25/AET/ADVANCE PO FOR SAWCOD/FIRE EX | 5190034063 | 00010 | JUN-25 Refilling Fire Extinguisher |\n| 00020 | JUN-25/AET/ADVANCE PO FOR UC/FIRE EXT. | 5190034063 | 00010 | JUN-25 Refilling Fire Extinguisher |\n\nBoth requisition lines (fire extinguisher work for different areas) were combined into a single PO line for the same supplier. The PO has been released and fully GRN'ed.\n\nNote: The system tracks PR-to-PO links at the **PR number level** rather than line-by-line, so this mapping is inferred from matching on PR number. The consolidation from two PR lines into one PO line is a procurement decision visible in the data.\n\nWould you like to see more detail about the purchase order or the GRN history? 📋"
   },
   "27": {
     "id": "27",
     "tier": "6 Harder",
     "q": "Show me PO 5150009248 from start to finish - who has approved it and who has not.",
-    "secs": 30,
+    "secs": 47,
     "ok": true,
-    "answer": "**PO 5150009248 is currently awaiting approval with employee 0064 (balarar@nesr.com) and has been waiting for 3 days.** It was created on 10 October 2026.\n\nThe purchase order follows release strategy **A5**, which has three sequential approval steps:\n\n| Step | Approver | Email | Status |\n|------|----------|-------|--------|\n| **2A** | 16494 | zfehri@nesr.com | ✅ Approved |\n| **A8** | 12041 | rdabous@nesr.com | ✅ Approved |\n| **A9** | 0064 | balarar@nesr.com | ⏳ **Pending** (3 days waiting) |\n\nThe PO contains **12 lines** totaling **589,596.77 AED** for various equipment and vehicle rentals (sand tyres, mobile cranes, pickup trucks, lowbed trailers, etc. - all for October 2026).\n\nAll lines are currently **Under Release** at step A9. Once employee 0064 approves, the PO will be fully released and can proceed to delivery. 🚀\n\nWould you like me to check the goods receipt status once it's approved, or do you need any other details about this order?"
+    "answer": "I have conflicting data here—let me explain what's happening with PO **5150009248**.\n\n## The Current State: Data Mismatch\n\n**According to po_line (loaded 14 Oct at 09:13):**  \nThe PO shows **\"Released\"** with full approval on 13 October 2026, and is marked as closed with no GRN.\n\n**According to po_waiting_with (loaded 13 Oct at 11:06):**  \nThe same PO is **currently waiting with employee 0064 (balarar@nesr.com)** for approval, has been waiting for 3 days, and last had action on 12 October.\n\nThe po_waiting_with snapshot is **more recent** (loaded ~2 hours after the PO was actually released based on po_line timestamps), which suggests this is a timing lag in the approval tracking—the release happened between the two data loads.\n\n---\n\n## What Happened (timeline reconstruction):\n\n| Date | Event |\n|------|-------|\n| **10 Oct 2026** | PO created with 12 service lines for vehicle/equipment hire in UAE |\n| **12 Oct 2026** | Last approval step completed before final sign-off |\n| **13 Oct 2026** | **Final approval by employee 0064 released the PO** (po_release_date = 13 Oct) |\n| | po_waiting_with snapshot taken at 11:06 still shows \"waiting\" |\n| | PO data loaded at 09:13 already shows \"Released\" |\n\n---\n\n## Approval Chain for Strategy A5\n\nThis PO follows release strategy **A5**, which has six approval steps:\n\n| Step | Approver | Email |\n|------|----------|-------|\n| **2A** | 16494 | zfehri@nesr.com |\n| **8A** | 12041 | rdabous@nesr.com |\n| **9A** | 0064 | balarar@nesr.com |\n| **A8** | 12041 | rdabous@nesr.com |\n| **A9** | 0064 | balarar@nesr.com |\n| **VW** | 16163 | helhalawani@nesr.com |\n\n**All six steps have now been approved.** The last signature was from employee **0064** (step 9A or A9) on 13 October, which released the PO.\n\n---\n\n## Summary\n\n✅ **PO 5150009248 is fully approved and released**  \n📦 12 service lines totaling **AED 589,596.77** (USD 160,507)  \n🚗 Vehicle and crane hire services for October 2026  \n📍 NESR Energy Services LLC, UAE  \n⏱️ Released on **13 October 2026**, 4 days ago  \n🚪 Status: **Closed, no GRN** (service entry sheets accepted)\n\nWould you like to see the invoice status, or check on the original requisition 1016006411? 🚚"
   },
   "29": {
     "id": "29",
@@ -147,9 +147,9 @@
     "id": "30",
     "tier": "6 Harder",
     "q": "Show me the full history of PR 1005026000 - every stage, date, and who had it.",
-    "secs": 35,
+    "secs": 21,
     "ok": true,
-    "answer": "PR 1005026000 has completed its full lifecycle – it's now **Fully GRN'ed**. Here's the complete journey:\n\n| PR Line | Description | Qty Requested | Requisition Date | PR Approved | PR→PO | PO Number | PO Approved | GRN Posted |\n|---------|-------------|---------------|------------------|-------------|-------|-----------|-------------|------------|\n| 00010 | JUN-25/AET/ADVANCE PO FOR SAWCOD/FIRE EX | 1 | 24 May 2025 | 26 May 2025 | 1 Jun 2025 | 5190034063-00010 | Released | 28 Jul 2025 |\n| 00020 | JUN-25/AET/ADVANCE PO FOR UC/FIRE EXT. | 1 | 26 May 2025 | 26 May 2025 | 1 Jun 2025 | 5190034063-00020 | Released | 28 Jul 2025 |\n\n**Timeline:**\n- **24 May 2025** – Requisition raised\n- **26 May 2025** – PR fully approved (2 days)\n- **1 June 2025** – PO 5190034063 created and released (6 days)\n- **28 July 2025** – Service entry sheets accepted (57 days after PO)\n\nThese are service lines (ordered quantity 1, received quantity 0), so the GRN represents accepted service entry sheets rather than physical goods arriving. The requisition is not currently waiting with anyone – it's complete. ✅\n\nWould you like to see the invoice or payment status for this order?"
+    "answer": "PR 1005026000 has moved all the way through to fully GRN'ed, but the invoice is **317 days overdue**. Here's the complete journey:\n\n| Stage | Date | Details |\n|-------|------|---------|\n| **PR Created** | 24 May 2025 | Tamer Osman requisitioned 2 lines for fire extinguisher services |\n| **PR Approved** | 26 May 2025 | Fully released (2 days) |\n| **PO Created** | 1 June 2025 | PO 5190034063 created (6 days after PR approval) |\n| **PO Released** | *(approved immediately)* | Issued to supplier 0001102416 (Automated Environmental Technologies) |\n| **GRN Posted** | 28 July 2025 | Service entry sheet accepted (57 days after PO) |\n| **Invoice Received** | 4 September 2025 | Invoice 8600013484 for SAR 3,066.71 |\n| **Payment Due** | 30 November 2025 | Net 90 terms |\n| **Payment Status** | **Overdue** | SAR 3,066.71 still outstanding, 317 days past due |\n\n**The requisition flow was clean** - no approval delays, converted to PO within a week, services delivered on schedule. The problem is on the **payment side**: this invoice has been sitting unpaid for nearly a year since it was due. \n\nWould you like me to check if there are any blocking issues in the GRIR reconciliation, or help draft a payment chase?"
   },
   "31": {
     "id": "31",
