@@ -1,0 +1,231 @@
+{
+  "pr_1005026000": [
+    {
+      "pr_item": "00010",
+      "overall_stage": "Fully GRN'ed",
+      "pr_release_state": "Fully Released",
+      "po_numbers": "5190034063",
+      "po_release_state": "Released",
+      "receipt_state": "Fully GRN'ed",
+      "waiting_with": null,
+      "pr_age_days": 508
+    },
+    {
+      "pr_item": "00020",
+      "overall_stage": "Fully GRN'ed",
+      "pr_release_state": "Fully Released",
+      "po_numbers": "5190034063",
+      "po_release_state": "Released",
+      "receipt_state": "Fully GRN'ed",
+      "waiting_with": null,
+      "pr_age_days": 508
+    }
+  ],
+  "po_5190034063": [
+    {
+      "po_item": "00010",
+      "release_state": "Released",
+      "receipt_state": "Fully GRN'ed",
+      "order_qty": 1,
+      "received_qty": 0,
+      "outstanding_qty": 0,
+      "is_service_line": true,
+      "gr": "2025-07-27T20:00:00.000Z"
+    }
+  ],
+  "po_5190034063_grns": [
+    {
+      "po_item": "00010",
+      "d": "2025-07-27T20:00:00.000Z",
+      "movement_type": "101",
+      "reversed_gr": "Received",
+      "gross_qty": 1,
+      "net_qty": 2
+    }
+  ],
+  "po_5150009248": [
+    {
+      "lines": 12,
+      "rel": "Under Release",
+      "rcpt": "PO unapproved",
+      "strategy": "A5",
+      "val": 589596.77,
+      "curr": "AED",
+      "created": "2026-10-09T20:00:00.000Z"
+    }
+  ],
+  "po_5150009248_waiting": [
+    {
+      "po_item": "00010",
+      "waiting_with": "0064",
+      "buyer_name": "Bashar Al Arar",
+      "days_waiting": "3",
+      "sub": null
+    },
+    {
+      "po_item": "00020",
+      "waiting_with": "0064",
+      "buyer_name": "Bashar Al Arar",
+      "days_waiting": "3",
+      "sub": null
+    },
+    {
+      "po_item": "00030",
+      "waiting_with": "0064",
+      "buyer_name": "Bashar Al Arar",
+      "days_waiting": "3",
+      "sub": null
+    }
+  ],
+  "po_5150009248_chain": [
+    {
+      "approval_step": "2A",
+      "approver": "16494",
+      "min_value": "0",
+      "max_value": "250.K"
+    },
+    {
+      "approval_step": "A8",
+      "approver": "12041",
+      "min_value": "0",
+      "max_value": "250.K"
+    },
+    {
+      "approval_step": "A9",
+      "approver": "0064",
+      "min_value": "0",
+      "max_value": "250.K"
+    }
+  ],
+  "po_5180004834": [
+    {
+      "po_item": "00020",
+      "receipt_state": "Fully GRN'ed",
+      "order_qty": 1,
+      "received_qty": 0,
+      "is_service_line": true,
+      "gr": "2024-11-29T20:00:00.000Z"
+    },
+    {
+      "po_item": "00030",
+      "receipt_state": "Fully GRN'ed",
+      "order_qty": 1,
+      "received_qty": 0,
+      "is_service_line": true,
+      "gr": "2024-11-29T20:00:00.000Z"
+    },
+    {
+      "po_item": "00040",
+      "receipt_state": "Fully GRN'ed",
+      "order_qty": 1,
+      "received_qty": 0,
+      "is_service_line": true,
+      "gr": "2024-11-29T20:00:00.000Z"
+    },
+    {
+      "po_item": "00050",
+      "receipt_state": "Fully GRN'ed",
+      "order_qty": 1,
+      "received_qty": 0,
+      "is_service_line": true,
+      "gr": "2024-11-29T20:00:00.000Z"
+    }
+  ],
+  "po_4160008900": [
+    {
+      "po_item": "00010",
+      "order_quantity": 60000,
+      "received_qty": 38400,
+      "intransit_quantity": 21600,
+      "not_collected_quantity": 0,
+      "delivery_status": "Partial Delivery+Intransit"
+    }
+  ],
+  "dhl_iraq": [],
+  "mkhattab": [
+    {
+      "lines": 239,
+      "pos": 5,
+      "oldest": 1876
+    }
+  ],
+  "overdue_invoices": [
+    {
+      "n": 356233,
+      "pos": 209878
+    }
+  ],
+  "grir_open": [
+    {
+      "n": 24228,
+      "pos": 5546,
+      "oldest_days": 1931
+    }
+  ],
+  "partially_grned": [
+    {
+      "lines": 1361,
+      "pos": 794
+    }
+  ],
+  "reversals": [
+    {
+      "n": 17855,
+      "pos": 5858
+    }
+  ],
+  "multi_delivery": [
+    {
+      "po_lines": 81362
+    }
+  ],
+  "bottleneck": [
+    {
+      "waiting_with": "16866",
+      "lines": 276,
+      "oldest": 197,
+      "avg_days": 29
+    },
+    {
+      "waiting_with": "MKHATTAB",
+      "lines": 239,
+      "oldest": 1876,
+      "avg_days": 1873
+    },
+    {
+      "waiting_with": "10985",
+      "lines": 230,
+      "oldest": 399,
+      "avg_days": 24
+    },
+    {
+      "waiting_with": "20661",
+      "lines": 202,
+      "oldest": 36,
+      "avg_days": 6
+    },
+    {
+      "waiting_with": "14342",
+      "lines": 194,
+      "oldest": 280,
+      "avg_days": 69
+    }
+  ],
+  "stuck_pr_no_po": [
+    {
+      "n": 13085
+    }
+  ],
+  "intransit_summary": [
+    {
+      "lines": 385,
+      "pos": 131,
+      "total_amt": 13752925
+    }
+  ],
+  "currencies_waiting": [
+    {
+      "currencies": 13
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "q9_pr_approved_no_po": {
+    "lines": 16191
+  },
+  "q11_pr_waiting": {
+    "lines": 1972,
+    "docs": 493
+  },
+  "q11_po_waiting": {
+    "lines": 3187,
+    "docs": 959
+  },
+  "q16_overdue_open_po": {
+    "lines": 6680,
+    "docs": 1905
+  },
+  "q19_overdue_invoices": {
+    "n": 356233,
+    "pos": 209878
+  },
+  "q18_grir_open": {
+    "n": 24228,
+    "pos": 5546
+  },
+  "q29_approved_overdue_nogrn": {
+    "lines": 5923
+  },
+  "q32_pr_bottleneck": {
+    "waiting_with": "5588",
+    "lines": 292,
+    "avg_d": 20
+  },
+  "q32_po_bottleneck": {
+    "waiting_with": "16866",
+    "lines": 276,
+    "avg_d": 29
+  },
+  "q17_invoice_balance": {
+    "invoice_doc": "8600013484",
+    "invoice_amount": 3066.71,
+    "payment_amount": 0,
+    "invoice_balance": -3066.71,
+    "payment_state": "Overdue"
+  },
+  "q22_dhl_by_supplier": {
+    "po_number": "5290004482",
+    "po_item": "00120",
+    "description": "Customs clearance-4460002385",
+    "d": "2025-10-20T20:00:00.000Z"
+  }
+}
