@@ -15,6 +15,13 @@ against `materials_db` — not against my own expectations.
 
 **Score: 21 pass · 5 partial · 6 fail.**
 
+> **Update, same day — F1 to F4 applied and retested.** 13 of the 32 questions were
+> re-run against the fixed agent: **11 now pass, 2 partial, 0 fail**. Both
+> max-iteration failures answer, and every count now matches ground truth. Two
+> regressions the fixes themselves caused were caught and closed, and one new finding
+> appeared. See [Update — fixes applied and retested](#update--fixes-applied-and-retested).
+
+
 Files: [questions.json](eval/questions.json) · [answers.json](eval/answers.json) ·
 [ground_truth.json](eval/ground_truth.json) · [verify.json](eval/verify.json)
 
@@ -267,22 +274,99 @@ Worth stating plainly, because it is most of the run:
 
 ---
 
-## Recommended order of work
+## Update — fixes applied and retested
 
-Nothing here has been changed yet — this is the report, as asked.
+F1 to F4 went into the Track My Request system prompt, plus the piece that made F2
+worth doing properly: the agent now has an **editable column dictionary** over the
+schema it actually reads.
 
-1. **F1** — the count rule. Five questions, one of them off by a factor of
-   7,000. Highest value, lowest risk, prompt-only.
-2. **F2** — key column names plus a short column dictionary in the prompt.
-   Turns two hard failures into answers.
-3. **F3** — one line documenting `[{"success":true}]`. Cheap, and it closes a
-   silent-wrong-answer path.
-4. **F5** — document the `invoice_balance` sign convention in `col_comments`.
-5. **F4 / F6** — presentation rules, promoted into the hard rules.
+**The gap F2 exposed was bigger than the fix.** `/admin/columns` documented 472
+columns on `core.*` — but Track My Request reads `track.*` and is forbidden from
+querying `core.*`, and the views rename columns on the way through. Measured before
+any of this: **16 views, 444 columns, 0 commented.** The agent had no column context
+at all, which is exactly why it was guessing names and burning iterations on
+`information_schema`.
 
-F1–F4 are all edits to the Track My Request system prompt. F5 is a
-`col_comments` edit, which flows through `/admin/columns` and survives every
-swap. No schema or view changes are needed for any of this.
+Three pieces, so the content is editable rather than buried in n8n:
 
-Re-running this same 32-question set after the changes gives a direct
-before-and-after, since `eval/ground_truth.json` is already measured.
+- `ai.column_docs` holds the descriptions as data — the same shape the other three
+  databases already use, so the admin API needed no changes.
+- `core.rebuild_track_views()` replays them as Postgres COMMENTs after each view is
+  recreated. Without this, every nightly `publish_all` would wipe them, because a
+  dropped view takes its COMMENTs with it.
+- `track.column_guide` exposes the whole dictionary in one query, replacing the
+  per-view lookups.
+
+**449 of 449 columns are now documented**, verified to survive a full drop-and-rebuild,
+and editable at **/admin/columns → Track My Request**. A save writes the data and
+re-applies the COMMENT in the same transaction, so an edit is live for the agent on its
+very next query.
+
+### Before and after
+
+| Q | Before | After | Truth | Now |
+| --- | --- | --- | --- | --- |
+| 27 | max iterations | full chain: 2A ✅ → A8 ✅ → A9 pending | — | **pass** |
+| 30 | max iterations | full lifecycle with timeline | — | **pass** |
+| 9 | "50" | 5,841 | 5,841 | **pass** |
+| 16 | "50" | 6,680 | 6,680 | **pass** |
+| 18 | "50" | 18,407 | 18,407 | **pass** |
+| 19 | "50" | 356,233 | 356,233 | **pass** |
+| 29 | "50" | 5,813 | 5,813 | **pass** |
+| 11 | 493 / 959 | 493 PRs (1,972 lines), 959 POs (3,187) | same | **pass** |
+| 6 | 12 identical rows, raw headers | readable headers, said once, answers *why* | — | **pass** |
+| 17 | balance −3,066.71 | Outstanding 3,066.71 | — | **pass** |
+| 32 | regression check | 5588 / 292 — still exact | same | **pass** |
+| 3 | showed GRN column | GRN column gone, but see F8 | — | partial |
+| 7 | contradictory phrasing | contradiction gone, but see F8 | — | partial |
+
+Q18 and Q29 came back **better than the original ground truth**. The agent excluded
+deleted lines and took only the goods-receipt half of GR/IR — both correct readings
+that the hand-written check queries had missed. The ground-truth file was the thing in
+error, not the agent.
+
+### Two regressions the fixes themselves caused
+
+**F1 made Q9 confidently wrong before it made it right.** With counts coming from
+`COUNT(*)`, Q9 returned **84,639** PR lines "approved but no PO" — of which **78,772
+were flagged deleted**. Cancelled requisitions counted as stuck. That is worse than the
+original "50", because it is wrong *and* confident. Real answer: 5,841.
+
+Fixing that then broke Q11. Steered toward the pre-filtered views, the agent picked
+`pr_pending_release` and reported **40,868** — but **39,907 of those lines are "Not
+Submitted"**, never sent for approval, so waiting on nobody. Real answer: 493 PRs.
+
+Trap 14 now covers both: exclude deleted and closed, and use `pr_waiting_with` /
+`po_waiting_with` for approval queues, never `pr_pending_release`. All four rechecks
+are clean.
+
+### F8 — a new finding: buyer reported as approver
+
+Q3 and Q7 now say the order is sitting with *"buyer Bashar Al Arar (ID 0064)"*. Those
+are two different people: **0064 is the approver; Bashar Al Arar is the buyer who
+raised the order.** Telling someone to chase the buyer sends them to the wrong desk,
+which is the specific failure these two questions exist to catch.
+
+The column description already warns about it in as many words — *"This is who raised
+the order, NOT the approver holding it"* — and the agent conflated them anyway. So this
+one probably needs the data to stop making it easy: either drop `buyer_name` from
+approval-shaped answers, or resolve `waiting_with` to a name so there is a right name
+to reach for. Not yet fixed.
+
+## Where this leaves the fix list
+
+| Fix | What | Status |
+| --- | --- | --- |
+| **F1** | Counts from `COUNT(*)`, not the LIMIT | **done** |
+| **F2** | Key column names, `track.column_guide`, admin-editable dictionary | **done** |
+| **F3** | `[{"success":true}]` documented as zero rows | **done** |
+| **F4** | Presentation rules promoted into the hard rules | **done** |
+| **F5** | Negative `invoice_balance` | explained in the dictionary; Q17 reads correctly, sign not flipped |
+| **F6** | GRN column on an unapproved PO | rule restated; Q3 no longer shows it |
+| **F7** | Deleted lines, and the right view for approval queues | **done** — found by this retest |
+| **F8** | Buyer reported as approver | **open** |
+
+**Caveat on the numbers.** 13 of 32 questions were re-run — the 6 failures, the 5
+partials, and Q11 and Q32 as regression checks. The other 19 were passes and were not
+re-run, so the projected **30 pass / 2 partial / 0 fail** assumes they held. A full
+32-question re-run would confirm it, and is cheap: ground truth is already measured.

@@ -112,6 +112,15 @@ against <code>materials_db</code> — not against my own expectations.</p>
   <span><i style="background:var(--fail)"></i>6 fail</span>
 </div>
 
+
+<div class="note good">
+  <p><strong>Update, same day — F1 to F4 applied and retested.</strong> 13 of the 32
+  questions were re-run against the fixed agent: <strong>11 now pass, 2 partial, 0 fail</strong>.
+  Both max-iteration failures answer, and every count now matches ground truth. Two
+  regressions the fixes themselves caused were caught and closed, and one new finding
+  appeared. <a href="#update">Jump to the follow-up &rarr;</a></p>
+</div>
+
 <div class="note good">
   <p><strong>The headline:</strong> every trap question passed, and every failure is
   mechanical — a <code>LIMIT</code> clause reported as a count, or the agent running out of
@@ -360,28 +369,111 @@ both large unbounded-looking list questions — which F1 would also make faster,
 over.</li>
 </ul>
 
-<h2>Recommended order of work</h2>
-<p>Nothing here has been changed yet — this is the report, as asked.</p>
-<ol>
-<li><strong>F1</strong> — the count rule. Five questions, one of them off by a factor of 7,000.
-Highest value, lowest risk, prompt-only.</li>
-<li><strong>F2</strong> — key column names plus a short column dictionary in the prompt. Turns
-two hard failures into answers.</li>
-<li><strong>F3</strong> — one line documenting <code>[{"success":true}]</code>. Cheap, and it
-closes a silent-wrong-answer path.</li>
-<li><strong>F5</strong> — document the <code>invoice_balance</code> sign convention in
-<code>col_comments</code>.</li>
-<li><strong>F4 / F6</strong> — presentation rules, promoted into the hard rules.</li>
-</ol>
+<h2 id="update">Update &mdash; fixes applied and retested</h2>
 
-<p>F1–F4 are all edits to the Track My Request system prompt. F5 is a
-<code>col_comments</code> edit, which flows through <code>/admin/columns</code> and survives
-every swap. <strong>No schema or view changes are needed for any of this.</strong></p>
+<p>F1 to F4 went into the Track My Request system prompt, plus the piece that made F2 worth
+doing properly: the agent now has an <strong>editable column dictionary</strong> over the
+schema it actually reads.</p>
 
-<p>Re-running this same 32-question set after the changes gives a direct before-and-after,
-since <code>eval/ground_truth.json</code> is already measured.</p>
+<div class="note bad">
+  <p><strong>The gap F2 exposed was bigger than the fix.</strong> /admin/columns documented
+  472 columns on <code>core.*</code> &mdash; but Track My Request reads <code>track.*</code>
+  and is forbidden from querying <code>core.*</code>, and the views rename columns on the way
+  through. Measured before any of this: <strong>16 views, 444 columns, 0 commented.</strong>
+  The agent had no column context at all, which is exactly why it was guessing names and
+  burning iterations on <code>information_schema</code>.</p>
+</div>
 
-<footer>NESR Supply Chain AI · Track My Request evaluation · 14 October 2026</footer>
+<p>Three pieces, so the content is yours to edit rather than buried in n8n:</p>
+<ul>
+<li><code>ai.column_docs</code> holds the descriptions as data &mdash; the same shape the other
+three databases already use, so the admin API needed no changes.</li>
+<li><code>core.rebuild_track_views()</code> replays them as Postgres COMMENTs after each view is
+recreated. Without this, every nightly <code>publish_all</code> would wipe them, because a
+dropped view takes its COMMENTs with it.</li>
+<li><code>track.column_guide</code> exposes the whole dictionary in one query, replacing the
+per-view lookups.</li>
+</ul>
+
+<p><strong>449 of 449 columns are now documented</strong>, verified to survive a full
+drop-and-rebuild, and editable at <strong>/admin/columns &rarr; Track My Request</strong>. A
+save writes the data and re-applies the COMMENT in the same transaction, so an edit is live
+for the agent on its very next query.</p>
+
+<h3>Before and after</h3>
+<div class="tbl"><div class="scroll"><table>
+<thead><tr><th>Q</th><th>Before</th><th>After</th><th>Truth</th><th>Now</th></tr></thead>
+<tbody>
+<tr><td class="q">27</td><td>max iterations</td><td>full chain: 2A &check; &rarr; A8 &check; &rarr; A9 pending</td><td class="n">&mdash;</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">30</td><td>max iterations</td><td>full lifecycle with timeline</td><td class="n">&mdash;</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">9</td><td class="n">&ldquo;50&rdquo;</td><td class="n">5,841</td><td class="n">5,841</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">16</td><td class="n">&ldquo;50&rdquo;</td><td class="n">6,680</td><td class="n">6,680</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">18</td><td class="n">&ldquo;50&rdquo;</td><td class="n">18,407</td><td class="n">18,407</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">19</td><td class="n">&ldquo;50&rdquo;</td><td class="n">356,233</td><td class="n">356,233</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">29</td><td class="n">&ldquo;50&rdquo;</td><td class="n">5,813</td><td class="n">5,813</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">11</td><td class="n">493 / 959</td><td>493 PRs (1,972 lines), 959 POs (3,187)</td><td class="n">same</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">6</td><td>12 identical rows, raw headers</td><td>readable headers, said once, answers <em>why</em></td><td class="n">&mdash;</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">17</td><td class="n">balance &minus;3,066.71</td><td class="n">Outstanding 3,066.71</td><td class="n">&mdash;</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">32</td><td>regression check</td><td>5588 / 292 &mdash; still exact</td><td class="n">same</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">3</td><td>showed GRN column</td><td>GRN column gone, but see F8</td><td class="n">&mdash;</td><td><span class="pill partial">partial</span></td></tr>
+<tr><td class="q">7</td><td>contradictory phrasing</td><td>contradiction gone, but see F8</td><td class="n">&mdash;</td><td><span class="pill partial">partial</span></td></tr>
+</tbody></table></div></div>
+
+<p>Q18 and Q29 came back <strong>better than the original ground truth</strong>. The agent
+excluded deleted lines and took only the goods-receipt half of GR/IR &mdash; both correct
+readings that the hand-written check queries had missed. The ground-truth file was the thing
+in error, not the agent.</p>
+
+<h3>Two regressions the fixes themselves caused</h3>
+<div class="note bad">
+  <p><strong>F1 made Q9 confidently wrong before it made it right.</strong> With counts coming
+  from <code>COUNT(*)</code>, Q9 returned <strong>84,639</strong> PR lines &ldquo;approved but
+  no PO&rdquo; &mdash; of which <strong>78,772 were flagged deleted</strong>. Cancelled
+  requisitions counted as stuck. That is worse than the original &ldquo;50&rdquo;, because it
+  is wrong <em>and</em> confident. Real answer: 5,841.</p>
+  <p>Fixing that then broke Q11. Steered toward the pre-filtered views, the agent picked
+  <code>pr_pending_release</code> and reported <strong>40,868</strong> &mdash; but
+  <strong>39,907 of those lines are &ldquo;Not Submitted&rdquo;</strong>, never sent for
+  approval, so waiting on nobody. Real answer: 493 PRs.</p>
+  <p>Trap 14 now covers both: exclude deleted and closed, and use <code>pr_waiting_with</code>
+  / <code>po_waiting_with</code> for approval queues, never <code>pr_pending_release</code>.
+  All four rechecks are clean.</p>
+</div>
+
+<h3>F8 &mdash; a new finding: buyer reported as approver</h3>
+<p>Q3 and Q7 now say the order is sitting with <em>&ldquo;buyer Bashar Al Arar (ID
+0064)&rdquo;</em>. Those are two different people: <strong>0064 is the approver; Bashar Al
+Arar is the buyer who raised the order.</strong> Telling someone to chase the buyer sends them
+to the wrong desk, which is the specific failure these two questions exist to catch.</p>
+<p>The column description already warns about it in as many words &mdash; <em>&ldquo;This is
+who raised the order, NOT the approver holding it&rdquo;</em> &mdash; and the agent conflated
+them anyway. So this one probably needs the data to stop making it easy: either drop
+<code>buyer_name</code> from approval-shaped answers, or resolve <code>waiting_with</code> to a
+name so there is a right name to reach for. Not yet fixed.</p>
+
+<h2>Where this leaves the fix list</h2>
+<div class="tbl"><div class="scroll"><table>
+<thead><tr><th>Fix</th><th>What</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td><strong>F1</strong></td><td>Counts from <code>COUNT(*)</code>, not the LIMIT</td><td><span class="pill pass">done</span></td></tr>
+<tr><td><strong>F2</strong></td><td>Key column names, <code>track.column_guide</code>, admin-editable dictionary</td><td><span class="pill pass">done</span></td></tr>
+<tr><td><strong>F3</strong></td><td><code>[{"success":true}]</code> documented as zero rows</td><td><span class="pill pass">done</span></td></tr>
+<tr><td><strong>F4</strong></td><td>Presentation rules promoted into the hard rules</td><td><span class="pill pass">done</span></td></tr>
+<tr><td><strong>F5</strong></td><td>Negative <code>invoice_balance</code></td><td><span class="pill partial">explained in the dictionary; Q17 reads correctly, sign not flipped</span></td></tr>
+<tr><td><strong>F6</strong></td><td>GRN column on an unapproved PO</td><td><span class="pill partial">rule restated; Q3 no longer shows it</span></td></tr>
+<tr><td><strong>F7</strong></td><td>Deleted lines, and the right view for approval queues</td><td><span class="pill pass">done &mdash; found by this retest</span></td></tr>
+<tr><td><strong>F8</strong></td><td>Buyer reported as approver</td><td><span class="pill fail">open</span></td></tr>
+</tbody></table></div></div>
+
+<div class="note">
+  <p><strong>Caveat on the numbers.</strong> 13 of 32 questions were re-run &mdash; the 6
+  failures, the 5 partials, and Q11 and Q32 as regression checks. The other 19 were passes and
+  were not re-run, so the projected <strong>30 pass / 2 partial / 0 fail</strong> assumes they
+  held. A full 32-question re-run would confirm it, and is cheap: ground truth is already
+  measured.</p>
+</div>
+
+<footer>NESR Supply Chain AI · Track My Request evaluation · 14 October 2026 · updated after F1–F4 were applied</footer>
 
 </div>
 </body>
