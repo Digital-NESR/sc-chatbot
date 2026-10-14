@@ -151,8 +151,9 @@
   ],
   "overdue_invoices": [
     {
-      "n": 356233,
-      "pos": 209878
+      "n": 359906,
+      "pos": null,
+      "note": "after the F5 payment_state fix: Partially paid removed, its 3,673 overdue rows folded in. Was 356,233."
     }
   ],
   "grir_open": [
@@ -213,7 +214,8 @@
   ],
   "stuck_pr_no_po": [
     {
-      "n": 13085
+      "n": 5841,
+      "note": "open_pr WHERE release_state=Fully Released. The earlier 13,085 and 16,191 used looser definitions; 84,639 is the figure including 78,772 deleted lines."
     }
   ],
   "intransit_summary": [
@@ -226,6 +228,13 @@
   "currencies_waiting": [
     {
       "currencies": 13
+    }
+  ],
+  "payment_state_after_f5": [
+    {
+      "Overdue": 359906,
+      "Open": 12725,
+      "Paid": 1189
     }
   ]
 }
