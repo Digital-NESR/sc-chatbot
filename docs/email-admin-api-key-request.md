@@ -39,11 +39,11 @@ Three things so we get the right key first time:
 manager, or set it on the server yourself as `ANTHROPIC_ADMIN_KEY=sk-ant-admin01-...` and just
 tell me it is done.
 
-**On the HSE bot**, so I can separate its spend:
-
-1. Does it use its **own** Anthropic API key, or share one with the other bots?
-2. If its own, is that key **named clearly** in the Console, for example `HSE Bot`? The
-   dashboard reads Console key names automatically.
+**One small thing on the HSE bot.** I understand it has its own API key on the same credits,
+which is all I need to report its spend separately. Could you just check that key is **named
+clearly** in the Console, for example `HSE Bot`? The dashboard reads Console key names
+automatically, so a clear name is the difference between a readable line and a row of
+characters.
 
 I do not need access to the HSE bot's n8n workflow. The usage data comes from Anthropic, keyed
 on which API key made each call.
@@ -55,8 +55,8 @@ Thanks,
 
 ## Notes for you (not part of the email)
 
-- If HSE bot shares a key, its cost cannot be split out. The fix is a second key swapped into
-  its n8n Anthropic credential. It will not backfill.
+- HSE bot has its own key on the same credit pool, so its spend splits out automatically and
+  the burn down covers both bots. No change needed.
 - If the bots sit in separate Workspaces, better still: the "By workspace" table is Anthropic's
   own billed figure with no apportioning.
 - Once the key is set, restart the app and the page populates. Nothing else needed.
