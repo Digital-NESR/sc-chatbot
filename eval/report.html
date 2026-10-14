@@ -113,12 +113,24 @@ against <code>materials_db</code> — not against my own expectations.</p>
 </div>
 
 
+<div class="note bad">
+  <p><strong>&#9888; The agent is currently down &mdash; unrelated to any of this.</strong>
+  The last three test calls failed with <em>&ldquo;Your credit balance is too low to access
+  the Anthropic API&rdquo;</em>. The Anthropic account behind the n8n workflows is out of
+  credits, and the error hits before the agent even runs, so <strong>Track My Request,
+  Materials AI, SourceGuide and the orchestrator are all affected for real users.</strong>
+  Remaining verification is blocked until it is topped up.</p>
+</div>
+
 <div class="note good">
-  <p><strong>Update, same day — F1 to F4 applied and retested.</strong> 13 of the 32
-  questions were re-run against the fixed agent: <strong>11 now pass, 2 partial, 0 fail</strong>.
-  Both max-iteration failures answer, and every count now matches ground truth. Two
-  regressions the fixes themselves caused were caught and closed, and one new finding
-  appeared. <a href="#update">Jump to the follow-up &rarr;</a></p>
+  <p><strong>Update, same day &mdash; all eight fixes applied.</strong> Two rounds of fixes
+  went in after this run, each retested against measured SQL rather than assumed.
+  <strong>F1&ndash;F4 and F7</strong> closed the counting and iteration failures;
+  <strong>F5, F6 and F8</strong> closed the money, column-discipline and
+  buyer-versus-approver problems. Of the questions re-run, <strong>every one now
+  passes</strong>, and several answer twice as fast as before.
+  <a href="#update">First round &rarr;</a> &nbsp;&middot;&nbsp;
+  <a href="#update2">Second round &rarr;</a></p>
 </div>
 
 <div class="note good">
@@ -451,6 +463,93 @@ them anyway. So this one probably needs the data to stop making it easy: either 
 <code>buyer_name</code> from approval-shaped answers, or resolve <code>waiting_with</code> to a
 name so there is a right name to reach for. Not yet fixed.</p>
 
+<h2 id="update2">Second round &mdash; F5, F6 and F8</h2>
+
+<div class="note bad">
+  <p><strong>F5 was not a display problem. It was a correctness bug.</strong> Measuring the
+  column before changing anything turned up something the original report had missed
+  entirely.</p>
+</div>
+
+<p>Over all 373,820 loaded invoices:</p>
+<ul>
+<li><code>invoice_balance</code> equals <code>-invoice_amount</code> on <strong>all 372,631
+non-zero rows</strong>. The minus sign is pure credit-side bookkeeping convention and carries
+no information at all.</li>
+<li><code>payment_amount</code> is non-zero on only <strong>3,865 of 373,820</strong> rows
+&mdash; and on <em>every one of those</em> it equals <code>invoice_amount</code> to the cent.
+It mirrors the amount. It never records a part payment.</li>
+</ul>
+
+<p>So the view&rsquo;s own <code>payment_state</code> was labelling those 3,865 rows
+<strong>&ldquo;Partially paid&rdquo; when nothing had been paid at all.</strong> The state is
+now removed &mdash; the source cannot express partial payment &mdash; and
+<code>amount_outstanding</code> added as the plain positive figure to report.
+<code>invoice_balance</code> is kept exactly as the source has it, so it still reconciles
+against SAP and the AP Aging model; flipping its sign would have made this view disagree with
+every other system showing the same number.</p>
+
+<div class="tbl"><div class="scroll"><table>
+<thead><tr><th>payment_state</th><th>Before</th><th>After</th></tr></thead>
+<tbody>
+<tr><td>Overdue</td><td class="n">356,233</td><td class="n"><strong>359,906</strong></td></tr>
+<tr><td>Open</td><td class="n">12,533</td><td class="n">12,725</td></tr>
+<tr><td>Paid</td><td class="n">1,189</td><td class="n">1,189</td></tr>
+<tr><td>Partially paid</td><td class="n">3,865 &mdash; all false</td><td class="n">removed</td></tr>
+</tbody></table></div></div>
+
+<p>The overdue figure therefore moves from 356,233 to <strong>359,906</strong>, and
+<code>eval/ground_truth.json</code> was corrected rather than left to disagree.</p>
+
+<h3>Retest</h3>
+<div class="tbl"><div class="scroll"><table>
+<thead><tr><th>Q</th><th>Before</th><th>After</th><th>Time</th><th>Now</th></tr></thead>
+<tbody>
+<tr><td class="q">17</td><td class="n">balance &minus;3,066.71</td><td class="n">Outstanding SAR 3,066.71, 317 days</td><td class="n">13s &rarr; 9s</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">19</td><td class="n">&ldquo;50 invoices&rdquo;</td><td class="n">359,906 &mdash; exact</td><td class="n">53s &rarr; 57s</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">20</td><td>correct</td><td>correct, now with Outstanding column</td><td class="n">16s &rarr; 24s</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">18</td><td class="n">&ldquo;50&rdquo;, negative amounts</td><td class="n">18,407 lines / 5,504 POs, positive</td><td class="n">51s &rarr; 56s</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">31</td><td>negative AED amounts</td><td>positive, and spotted the offsetting line</td><td class="n">17s &rarr; 22s</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">3</td><td>showed GRN column</td><td>&ldquo;Until it is approved, nothing can be GRN&rsquo;ed or invoiced&rdquo;</td><td class="n">35s &rarr; 29s</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">1</td><td>regression check</td><td>correct</td><td class="n">27s &rarr; 18s</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">2</td><td>regression check</td><td>correct, service line flagged</td><td class="n">19s &rarr; 10s</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">5</td><td>regression check</td><td>correct</td><td class="n">23s &rarr; 16s</td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">12</td><td>regression check</td><td>correct</td><td class="n">26s &rarr; <strong>9s</strong></td><td><span class="pill pass">pass</span></td></tr>
+<tr><td class="q">21</td><td>trap &mdash; passed</td><td>still passes, refuses the premise</td><td class="n">18s &rarr; 13s</td><td><span class="pill pass">pass</span></td></tr>
+</tbody></table></div></div>
+
+<h3>A third max-iterations failure, with a new cause</h3>
+<p>Q3 died on the first F5/F6 retest. The trace shows a different problem from Q27 and Q30:
+<strong>6 of 9 iterations were lost to single wrong column names</strong> &mdash;
+<code>po_number</code> on request_lifecycle (it is <code>po_numbers</code>, plural),
+<code>unit</code> (it is <code>order_unit</code>), <code>requisitioner_name</code>, and
+<code>buyer_name</code> and <code>waiting_with</code> on <code>po_line</code>, where neither
+exists.</p>
+
+<div class="note bad">
+  <p><strong>The database reports only ONE missing column per attempt.</strong> So a wide
+  hand-written <code>SELECT</code> costs an iteration per wrong guess, and six guesses eat a
+  ten-iteration budget before the real question is reached. The column guide did not help
+  here, because the agent was writing the column list from memory rather than checking it.</p>
+</div>
+
+<p>Fix: for a single named document, <code>SELECT *</code> and pick from what comes back.
+No enumeration, no guessing, one iteration. That is also why the retest times dropped
+&mdash; Q12 went from 26s to 9s.</p>
+
+<h3>F8 closed as a side effect</h3>
+<p>Q3 now reads: sitting with <strong>approver 0064</strong>, raised by <strong>buyer Bashar
+Al Arar</strong> &mdash; two people, correctly separated. The clearer column handling fixed
+it without needing the view change the first report proposed.</p>
+
+<h3>One fabricated number, caught</h3>
+<p>On the first F5 retest Q17 said the invoice was <em>&ldquo;overdue for 53 days&rdquo;</em>.
+The real figure is 317, and <strong>53 appears in no column anywhere</strong> &mdash; it was
+invented. Checking further, <code>days_past_due</code> is computed when the source model is
+built and disagrees with <code>CURRENT_DATE</code> on <strong>all 373,820 rows</strong>,
+usually by a day. That is now documented, and the rule against unverified arithmetic
+tightened to cover any stated number. Q17 reads 317 correctly after the change.</p>
+
 <h2>Where this leaves the fix list</h2>
 <div class="tbl"><div class="scroll"><table>
 <thead><tr><th>Fix</th><th>What</th><th>Status</th></tr></thead>
@@ -459,18 +558,29 @@ name so there is a right name to reach for. Not yet fixed.</p>
 <tr><td><strong>F2</strong></td><td>Key column names, <code>track.column_guide</code>, admin-editable dictionary</td><td><span class="pill pass">done</span></td></tr>
 <tr><td><strong>F3</strong></td><td><code>[{"success":true}]</code> documented as zero rows</td><td><span class="pill pass">done</span></td></tr>
 <tr><td><strong>F4</strong></td><td>Presentation rules promoted into the hard rules</td><td><span class="pill pass">done</span></td></tr>
-<tr><td><strong>F5</strong></td><td>Negative <code>invoice_balance</code></td><td><span class="pill partial">explained in the dictionary; Q17 reads correctly, sign not flipped</span></td></tr>
-<tr><td><strong>F6</strong></td><td>GRN column on an unapproved PO</td><td><span class="pill partial">rule restated; Q3 no longer shows it</span></td></tr>
-<tr><td><strong>F7</strong></td><td>Deleted lines, and the right view for approval queues</td><td><span class="pill pass">done &mdash; found by this retest</span></td></tr>
-<tr><td><strong>F8</strong></td><td>Buyer reported as approver</td><td><span class="pill fail">open</span></td></tr>
+<tr><td><strong>F5</strong></td><td><code>amount_outstanding</code> added; false &ldquo;Partially paid&rdquo; state removed</td><td><span class="pill pass">done &mdash; was a correctness bug</span></td></tr>
+<tr><td><strong>F6</strong></td><td>No GRN columns on an unapproved document &mdash; now hard rule 13</td><td><span class="pill pass">done</span></td></tr>
+<tr><td><strong>F7</strong></td><td>Deleted lines, and the right view for approval queues</td><td><span class="pill pass">done &mdash; found by retest</span></td></tr>
+<tr><td><strong>F8</strong></td><td>Buyer reported as approver</td><td><span class="pill pass">done &mdash; fixed as a side effect</span></td></tr>
+<tr><td><strong>F9</strong></td><td>Wide hand-written SELECTs burning an iteration per wrong column</td><td><span class="pill pass">done &mdash; found by retest</span></td></tr>
 </tbody></table></div></div>
 
+<h2>What is left</h2>
+<ul>
+<li><strong>Top up the Anthropic credits.</strong> Everything else is blocked behind it, and
+the live agents are down for users meanwhile.</li>
+<li><strong>Run the full 32 again.</strong> 19 of the 32 have not been re-run since the fixes
+&mdash; they were passes and are assumed to have held, which is an assumption, not a result.
+Ground truth is already measured, so the run is cheap.</li>
+<li>Unrelated, still open from earlier: the Shipwaves password sits in plaintext in the Auth
+node, and the Power BI secret is in three workflow nodes.</li>
+</ul>
+
 <div class="note">
-  <p><strong>Caveat on the numbers.</strong> 13 of 32 questions were re-run &mdash; the 6
-  failures, the 5 partials, and Q11 and Q32 as regression checks. The other 19 were passes and
-  were not re-run, so the projected <strong>30 pass / 2 partial / 0 fail</strong> assumes they
-  held. A full 32-question re-run would confirm it, and is cheap: ground truth is already
-  measured.</p>
+  <p><strong>Honest status.</strong> Every fix is applied and every question re-run passes.
+  But &ldquo;every question re-run&rdquo; is 17 of 32, not all of them, and the final three
+  calls failed on billing rather than on merit. Treat the fix list as done and the overall
+  score as unconfirmed until a clean full run exists.</p>
 </div>
 
 <footer>NESR Supply Chain AI · Track My Request evaluation · 14 October 2026 · updated after F1–F4 were applied</footer>

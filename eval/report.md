@@ -15,11 +15,17 @@ against `materials_db` — not against my own expectations.
 
 **Score: 21 pass · 5 partial · 6 fail.**
 
-> **Update, same day — F1 to F4 applied and retested.** 13 of the 32 questions were
-> re-run against the fixed agent: **11 now pass, 2 partial, 0 fail**. Both
-> max-iteration failures answer, and every count now matches ground truth. Two
-> regressions the fixes themselves caused were caught and closed, and one new finding
-> appeared. See [Update — fixes applied and retested](#update--fixes-applied-and-retested).
+> **⚠ The agent is currently down — unrelated to any of this.** The last three test
+> calls failed with *"Your credit balance is too low to access the Anthropic API"*. The
+> Anthropic account behind the n8n workflows is out of credits, and the error hits before
+> the agent even runs, so Track My Request, Materials AI, SourceGuide and the orchestrator
+> are all affected for real users. Remaining verification is blocked until it is topped up.
+
+> **Update, same day — all eight fixes applied.** Two rounds of fixes went in after this
+> run, each retested against measured SQL rather than assumed. F1–F4 and F7 closed the
+> counting and iteration failures; F5, F6 and F8 closed the money, column-discipline and
+> buyer-versus-approver problems. Of the questions re-run, every one now passes, and
+> several answer twice as fast as before.
 
 
 Files: [questions.json](eval/questions.json) · [answers.json](eval/answers.json) ·
@@ -353,6 +359,82 @@ one probably needs the data to stop making it easy: either drop `buyer_name` fro
 approval-shaped answers, or resolve `waiting_with` to a name so there is a right name
 to reach for. Not yet fixed.
 
+## Second round — F5, F6 and F8
+
+**F5 was not a display problem. It was a correctness bug.** Measuring the column before
+changing anything turned up something the original report had missed entirely.
+
+Over all 373,820 loaded invoices:
+
+- `invoice_balance` equals `-invoice_amount` on **all 372,631 non-zero rows**. The minus
+  sign is pure credit-side bookkeeping convention and carries no information at all.
+- `payment_amount` is non-zero on only **3,865 of 373,820** rows — and on *every one of
+  those* it equals `invoice_amount` to the cent. It mirrors the amount. It never records a
+  part payment.
+
+So the view's own `payment_state` was labelling those 3,865 rows **"Partially paid" when
+nothing had been paid at all.** The state is now removed — the source cannot express
+partial payment — and `amount_outstanding` added as the plain positive figure to report.
+`invoice_balance` is kept exactly as the source has it, so it still reconciles against SAP
+and the AP Aging model.
+
+| payment_state | Before | After |
+| --- | --- | --- |
+| Overdue | 356,233 | **359,906** |
+| Open | 12,533 | 12,725 |
+| Paid | 1,189 | 1,189 |
+| Partially paid | 3,865 — all false | removed |
+
+`eval/ground_truth.json` was corrected rather than left to disagree.
+
+### Retest
+
+| Q | Before | After | Time | Now |
+| --- | --- | --- | --- | --- |
+| 17 | balance −3,066.71 | Outstanding SAR 3,066.71, 317 days | 13s → 9s | **pass** |
+| 19 | "50 invoices" | 359,906 — exact | 53s → 57s | **pass** |
+| 20 | correct | correct, now with Outstanding column | 16s → 24s | **pass** |
+| 18 | "50", negative amounts | 18,407 lines / 5,504 POs, positive | 51s → 56s | **pass** |
+| 31 | negative AED amounts | positive, spotted the offsetting line | 17s → 22s | **pass** |
+| 3 | showed GRN column | "Until it is approved, nothing can be GRN'ed or invoiced" | 35s → 29s | **pass** |
+| 1 | regression check | correct | 27s → 18s | **pass** |
+| 2 | regression check | correct, service line flagged | 19s → 10s | **pass** |
+| 5 | regression check | correct | 23s → 16s | **pass** |
+| 12 | regression check | correct | 26s → **9s** | **pass** |
+| 21 | trap — passed | still passes, refuses the premise | 18s → 13s | **pass** |
+
+### A third max-iterations failure, with a new cause
+
+Q3 died on the first F5/F6 retest. The trace shows a different problem from Q27 and Q30:
+**6 of 9 iterations were lost to single wrong column names** — `po_number` on
+request_lifecycle (it is `po_numbers`, plural), `unit` (it is `order_unit`),
+`requisitioner_name`, and `buyer_name` and `waiting_with` on `po_line`, where neither
+exists.
+
+**The database reports only ONE missing column per attempt.** So a wide hand-written
+`SELECT` costs an iteration per wrong guess, and six guesses eat a ten-iteration budget
+before the real question is reached. The column guide did not help here, because the agent
+was writing the column list from memory rather than checking it.
+
+Fix: for a single named document, `SELECT *` and pick from what comes back. No
+enumeration, no guessing, one iteration. That is also why the retest times dropped — Q12
+went from 26s to 9s.
+
+### F8 closed as a side effect
+
+Q3 now reads: sitting with **approver 0064**, raised by **buyer Bashar Al Arar** — two
+people, correctly separated. The clearer column handling fixed it without needing the view
+change the first report proposed.
+
+### One fabricated number, caught
+
+On the first F5 retest Q17 said the invoice was *"overdue for 53 days"*. The real figure is
+317, and **53 appears in no column anywhere** — it was invented. Checking further,
+`days_past_due` is computed when the source model is built and disagrees with
+`CURRENT_DATE` on **all 373,820 rows**, usually by a day. That is now documented, and the
+rule against unverified arithmetic tightened to cover any stated number. Q17 reads 317
+correctly after the change.
+
 ## Where this leaves the fix list
 
 | Fix | What | Status |
@@ -361,12 +443,23 @@ to reach for. Not yet fixed.
 | **F2** | Key column names, `track.column_guide`, admin-editable dictionary | **done** |
 | **F3** | `[{"success":true}]` documented as zero rows | **done** |
 | **F4** | Presentation rules promoted into the hard rules | **done** |
-| **F5** | Negative `invoice_balance` | explained in the dictionary; Q17 reads correctly, sign not flipped |
-| **F6** | GRN column on an unapproved PO | rule restated; Q3 no longer shows it |
-| **F7** | Deleted lines, and the right view for approval queues | **done** — found by this retest |
-| **F8** | Buyer reported as approver | **open** |
+| **F5** | `amount_outstanding` added; false "Partially paid" state removed | **done** — was a correctness bug |
+| **F6** | No GRN columns on an unapproved document — now hard rule 13 | **done** |
+| **F7** | Deleted lines, and the right view for approval queues | **done** — found by retest |
+| **F8** | Buyer reported as approver | **done** — fixed as a side effect |
+| **F9** | Wide hand-written SELECTs burning an iteration per wrong column | **done** — found by retest |
 
-**Caveat on the numbers.** 13 of 32 questions were re-run — the 6 failures, the 5
-partials, and Q11 and Q32 as regression checks. The other 19 were passes and were not
-re-run, so the projected **30 pass / 2 partial / 0 fail** assumes they held. A full
-32-question re-run would confirm it, and is cheap: ground truth is already measured.
+## What is left
+
+- **Top up the Anthropic credits.** Everything else is blocked behind it, and the live
+  agents are down for users meanwhile.
+- **Run the full 32 again.** 19 of the 32 have not been re-run since the fixes — they were
+  passes and are assumed to have held, which is an assumption, not a result. Ground truth
+  is already measured, so the run is cheap.
+- Unrelated, still open from earlier: the Shipwaves password sits in plaintext in the Auth
+  node, and the Power BI secret is in three workflow nodes.
+
+**Honest status.** Every fix is applied and every question re-run passes. But "every
+question re-run" is 17 of 32, not all of them, and the final three calls failed on billing
+rather than on merit. Treat the fix list as done and the overall score as unconfirmed until
+a clean full run exists.
