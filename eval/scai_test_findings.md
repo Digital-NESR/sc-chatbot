@@ -10,14 +10,14 @@ immediately below for what actually happened to each.
 
 | | Finding | Status |
 | --- | --- | --- |
-| D1 | Sales and asset material in scope | **Done.** ZSER and ZAST excluded from both routes: the agent SQL and the pgvector query in Build Search SQL. Expressed as material_type, which maps 1:1 onto the 71xxx/91xxx ranges with zero overlap. Nothing deleted; all 309,207 rows remain for analysis. |
-| D2 | Part number matched against the material number | **Done.** Containment step added on manufacturer_part_no, guarded against over-matching, plus an explicit rule never to match a part number against . |
-| D3 | Dead  /  step | **Done.** Replaced with explicit character classes and forbidden by a hard rule. |
+| D1 | Sales and asset material in scope | **Done.** ZSER and ZAST excluded from both routes: the agent SQL and the pgvector query in `Build Search SQL`. Expressed as `material_type`, which maps 1:1 onto the 71xxx/91xxx ranges with zero overlap. Nothing deleted; all 309,207 rows remain for analysis. |
+| D2 | Part number matched against the material number | **Done.** Containment step added on `manufacturer_part_no`, guarded against over-matching, plus an explicit rule never to match a part number against `material`. |
+| D3 | Dead `\m` / `\M` step | **Done.** Replaced with explicit character classes and forbidden by a hard rule. |
 | D4 | Deletion flags ignored | **Done.** Both columns now in every duplicate-check query, with a recursive CTE supplied for the successor chain. Chains run up to 3 hops and 5,728 links are multi-hop, so a single lookup would still have been wrong. |
 | D5 | Results differ from SAP | **Resolved itself.** The source refreshed; 119276 now shows flagged with successor 119109, matching the SAP screenshot. The remaining idea, stating data age on a verdict, was not implemented. |
 
-Verified live after publishing:  now returns both MPN variants and recommends the
-live 119109;  walks 16640 to 119276 to 119109 and checks plant extension on the
+Verified live after publishing: `P141228` now returns both MPN variants and recommends the
+live 119109; `AF1797M` walks 16640 to 119276 to 119109 and checks plant extension on the
 live material.
 
 **Not re-verified:** the six cases that were already passing (P1 to P6 below). Only the two
