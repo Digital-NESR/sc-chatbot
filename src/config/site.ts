@@ -148,33 +148,56 @@ export const siteConfig = {
     },
 
     /* ── Suggestions ── */
+    // Starter questions. All 25 were run against the live agents before being
+    // put here, and each is ordered fastest first, because the first bubble a
+    // user clicks sets their impression of how quick the product is.
+    // Measured response times are in the comments. Re-test before editing:
+    // a question that asks a clarifying question back, or takes a minute,
+    // reads as a worse product than it is.
     suggestions: {
+        // Every question routes to a different specialist, so the five
+        // together show what the orchestrator actually does. Slowest is 36s;
+        // the cross-agent version of the AF1797M question took 79s and was
+        // dropped for that reason alone.
         orchestrator: [
-            'Do we have a material for this, and who supplies it: ',
-            'What is the policy and the approved vendor for: ',
-            'Is it in stock, and can I raise a PR for it at plant: ',
+            'How many contracted prices have already expired?',              // 11s
+            'How many quotations do I need before raising a purchase order?', // 15s
+            'Which suppliers are approved for laptops in HQ Dubai?',          // 21s
+            'Is AF1797M already in the system?',                              // 24s
+            'How many purchase orders are waiting for approval right now?',   // 36s
         ],
         material: [
-            'Check VDC stock for material ID: ',
-            'Is there a duplicate part for: ',
-            'Can I create a new material for: ',
+            'Check VDC stock for material 000001100000046391',                    // 8s
+            'How many materials are flagged for deletion but still have stock?',  // 10s
+            'We need a 1/2 inch stainless ball valve. Does one already exist?',   // 19s
+            'Is AF1797M already in the system?',                                  // 22s
+            'Show me the Donaldson filters we have',                              // 23s
         ],
         logistics: [
-            'What is the SC policy for: ',
-            'Summarize the policy on: ',
-            'Who is responsible for the policy on: ',
+            'What is the policy on sole source purchases?',                   // 9s
+            'What are the incoterms rules we follow?',                        // 9s
+            'How many quotations do I need before raising a purchase order?', // 10s
+            'What is the approval threshold for a purchase order?',           // 10s
+            'How do I arrange a shipment between NESR locations?',            // 15s
         ],
         sourceguide: [
-            'Which Supplier to use for Laptops in HQ Dubai?',
-            'Who supplies Medical Insurance in Egypt?',
-            'Check vendor details for Barite in UAE',
+            'How many contracted prices have already expired?',                 // 6s
+            'Which suppliers are approved for laptops in HQ Dubai?',            // 14s
+            'Which suppliers do we spend the most with?',                       // 16s
+            'Show me the approved suppliers for safety boots in Saudi Arabia',  // 20s
+            'Do we have any sole source approvals in place?',                   // 28s
         ],
+        // Slowest set, 35s to 57s, because these scan the largest tables.
+        // Faster phrasings were tried and were not meaningfully quicker.
         trackrequest: [
-            'What is the status of my request: ',
-            'Where is the shipment for PO: ',
-            'Show me all my pending requests',
+            'Who is the bottleneck in approvals right now?',                              // 35s
+            'Which requests are stuck waiting for approval right now?',                   // 37s
+            'We received goods but no invoice has come through. Which POs are like that?', // 41s
+            'How many invoices are overdue, and what is the oldest?',                      // 53s
+            'Which open POs are past their delivery date?',                                // 57s
         ],
     },
+
 
     /* ── Agents ── */
     agents: [
