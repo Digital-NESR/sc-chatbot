@@ -15,8 +15,15 @@
 -- downtime.
 --
 -- Refreshed by the n8n workflow "All Plants Imports to SQL"
--- (87GsFdcED1nmG9XQ), daily at 17:00 UTC - after the Materials AI loader
--- has finished its 09:00-16:00 window and republished the source.
+-- (87GsFdcED1nmG9XQ), daily at 08:00 Asia/Dubai. The workflow timezone is
+-- pinned rather than inherited, since the instance default is UTC and the
+-- cron would otherwise fire at noon Gulf.
+--
+-- 08:00 Gulf is 04:00 UTC, which is BEFORE the Materials AI loader runs
+-- that day (09:00-16:00 UTC), so the copy carries the PREVIOUS day's
+-- load - about 12 hours behind. That is deliberate: the table is fresh
+-- when people arrive, and plant reference data changes monthly at most.
+-- Compare synced_at with loaded_at to see both ages.
 --
 -- The workflow issues this same CREATE TABLE IF NOT EXISTS before every
 -- load, so the table is self-healing; this file is the readable record.
