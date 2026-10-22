@@ -91,3 +91,47 @@ as-is rather than rewording it into “there are none”.
 
 Verified: the same question now returns “the PO approval data hasn't been loaded
 into the system yet”, and the orchestrator passes that through unchanged.
+
+
+## Materials AI: what a duplicate check searches
+
+The material master holds 309,207 rows and **61% of them are not stockable
+material**. Offering one as a possible duplicate is always wrong. From the
+October test round: a search for part number `P141228` returned
+"10.7.1.11.2 AlYasat Weekly", a service subscription.
+
+| material_type | Rows | SAP range | Searched |
+| --- | --- | --- | --- |
+| ZSER sales / service | 183,862 | all `71xxx` | no |
+| ZAST asset | 6,187 | all `91xxx` | no |
+| ZMS stockable | 112,836 | all `11xxx` | yes |
+| ZPR, ZRW, ZADM, ERSA, DIEN | 6,322 | `29/51/61/…` | yes |
+
+Scope is expressed as `material_type`, not as a number range. The two map
+**1:1 with zero overlap** - every ZSER is 71xxx, every ZAST is 91xxx, every ZMS
+is 11xxx - so they are interchangeable as a filter, but the type is
+self-documenting and it keeps ZPR, ZRW, ZADM, ERSA and DIEN, which are real
+stockable items (gaskets, bar stock, equipment) and were nearly lost to a
+number-range rule.
+
+Applied in two places, because there are two ways into the data:
+
+- **`Build Search SQL`** adds `WHERE material_type NOT IN ('ZSER','ZAST')` to
+  the pgvector query, so `search_materials` cannot return them.
+- **The agent prompt** carries the same filter on every duplicate-check query.
+
+**This is a search filter, not a deletion.** Every row is still in
+`core.material_master_data` and in `ai.material_embedding`, so the data remains
+available for analysis - which is the whole reason it was not filtered at the
+loader. The prompt tells the agent to drop the filter for analytical questions
+and say that it has.
+
+One detail worth keeping: **not one of the 183,862 ZSER rows carries a
+manufacturer part number.** A part-number search can therefore never match one
+legitimately. When it appeared to, the match had come from the material NUMBER
+rather than the part number - a separate defect, still open.
+
+Checked on pgvector 0.8.2 before shipping: the filtered vector query still
+returns a full topK with identical top matches, at roughly 3x latency
+(129ms -> 424ms on a 10-row probe). If that degrades, iterative index scans are
+the lever.
