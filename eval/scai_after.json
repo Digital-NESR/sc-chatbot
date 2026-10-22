@@ -1,0 +1,16 @@
+[
+  {
+    "id": "T1",
+    "q": "P141228 check P/N",
+    "secs": 16,
+    "ok": true,
+    "answer": "## ✅ DUPLICATE FOUND\n\nPart number **P141228** exists in the system:\n\n| Material | Description | Manufacturer | MPN | Type | Deletion Flag | Successor |\n|----------|-------------|--------------|-----|------|---------------|-----------|\n| 000001100000119109 | FILTER AIR # SANJEL UNIT | 0001600022 | AF1797M P141228 | ZMS | - | - |\n| 000001100000004885 | FILTER AIR # SANJEL UNIT | - | AF1797M/P141228/ | ZMS | **X** | 1100000119109 |\n\n**Material 000001100000004885** is flagged for deletion and superseded by **000001100000119109**.\n\n### ✅ Use material: **000001100000119109**\n\nThis is the live, active material for part number P141228 (listed as AF1797M P141228 - a Fleetguard air filter). Do not create a new material or use the deleted one.\n\n---\n\nLet me check which plants this material is extended to. **Which plant are you raising this for (4-digit code)?**"
+  },
+  {
+    "id": "T2",
+    "q": "Is AF1797M already in the system? Plant 8013.",
+    "secs": 22,
+    "ok": true,
+    "answer": "**Yes, AF1797M is in the system** ✓\n\nHowever, it has been superseded through a chain. Here's what I found:\n\n### Supersession Chain\n\n| Hop | Material | Description | MPN | Flagged | Successor |\n|-----|----------|-------------|-----|---------|-----------|\n| 0 | 000001100000016640 | Fleedgaurd Air Filter AF1797M | AF1797M | X | 1100000119276 |\n| 1 | 000001100000119276 | Fleedgaurd Air Filter AF1797M | AF1797M | X | 1100000119109 |\n| 2 | **000001100000119109** | **FILTER AIR # SANJEL UNIT** | **AF1797M P141228** | _(live)_ | - |\n\n### ✅ Live Material to Use\n\n**Material: 000001100000119109**  \n**Description:** FILTER AIR # SANJEL UNIT  \n**Manufacturer Part No:** AF1797M P141228  \n**Base Unit:** EA  \n**Material Type:** ZMS\n\n### Plant Extension Status for 8013\n\n✅ **This material IS extended to plant 8013** – you can raise a PR against it.\n\nThe material is also extended to 21 other plants including 1081, 1130, 1170, 1181, 1336, 1381, 1470, 1570, 1670, 1770 (and 12 more).\n\n**Note:** Plant extension data is inferred from inventory records rather than the SAP material-plant master and should be confirmed in SAP before proceeding.\n\nWould you like me to check current stock availability for this material at plant 8013? 📦"
+  }
+]

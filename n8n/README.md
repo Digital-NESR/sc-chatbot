@@ -135,3 +135,47 @@ Checked on pgvector 0.8.2 before shipping: the filtered vector query still
 returns a full topK with identical top matches, at roughly 3x latency
 (129ms -> 424ms on a 10-row probe). If that degrades, iterative index scans are
 the lever.
+
+### Three more fixes from the same test round
+
+**The word-boundary step had never run.** Section A step 3 used Postgres `\m`
+and `\M` escapes. Through this connection those return **zero rows**, silently:
+
+| | rows |
+| --- | --- |
+| `material_description ~ '\m1797\M'` | **0** |
+| `material_description ~ '(^\|[^0-9])1797([^0-9]\|$)'` | **2**, both correct |
+
+That step exists specifically so "Type 120" does not match "Type 128". It was
+dead. Now a hard rule forbids `\m`/`\M` outright, the same bug having already
+been found and fixed in Track My Request.
+
+**Part numbers were matched against the wrong column.** The exact step compares
+normalised strings for EQUALITY, so `AF1797M/P141228/` (normalising to
+`AF1797MP141228`) never matched a search for `P141228`. With no hit the agent
+improvised and landed on the material NUMBER `000007100000141228`. There is now
+a containment fallback on `manufacturer_part_no`, and an explicit rule that a
+user-supplied part number is never matched against `material`.
+
+Containment over-matches, so it is guarded: `870` alone hits 641 part numbers.
+Inputs shorter than 5 normalised characters are refused, and more than ~20 rows
+is reported as too generic rather than as a duplicate.
+
+**Deletion flags were ignored.** `df_at_client_level` (45,708 rows) and
+`successor_code` were not mentioned in the prompt at all, so flagged materials
+were recommended. The agent had appeared to handle supersession correctly in
+other tests, but only because those descriptions literally read
+`DEL USE 1100000025682` - it was reading the description, not the flag.
+
+Chains are not one hop: `1100000016640 -> 1100000119276 -> 1100000119109`, only
+the last live. Measured: up to 3 hops, 5,728 multi-hop links. The prompt now
+carries a recursive CTE that pads `successor_code` to 18 characters and stops at
+5 hops. 23,395 of 23,397 successors resolve to a real material; the rest are
+vendor codes like `ID-0087` and are reported raw.
+
+Verified live after publishing:
+
+| Case | Before | After |
+| --- | --- | --- |
+| `P141228` | returned a weekly service subscription | both MPN variants, flagged one identified, recommends 119109 |
+| `AF1797M` | recommended 119276, which is flagged | walks 16640 to 119276 to 119109, recommends 119109, checks plant extension on the live one |
