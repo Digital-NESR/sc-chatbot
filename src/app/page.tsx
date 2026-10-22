@@ -248,7 +248,10 @@ export default function Home() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  const [activeAgentId, setActiveAgentId] = useState<AgentId>('material');
+  // Lands on the orchestrator, which routes to whichever specialist the
+  // question needs. Opening on one specialist made it the default for people
+  // who never switched, including for questions it cannot answer.
+  const [activeAgentId, setActiveAgentId] = useState<AgentId>('orchestrator');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
