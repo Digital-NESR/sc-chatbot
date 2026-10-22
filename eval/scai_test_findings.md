@@ -242,3 +242,58 @@ your document. D1 is the larger change and is blocked on the two questions above
 
 After any of these land I would re-run your six test cases plus the AF1797M case, against
 measured SQL rather than by eye.
+
+
+---
+
+## D6. Fabricated table rows (found 22 Oct, during the regression re-run)
+
+Re-running the six previously-passing cases after the three prompt rewrites, five held
+and **P4 failed badly**.
+
+Asked *"Show me the Fleetguard filters we have"*, the agent returned a six-row table of
+which **five rows were invented**:
+
+| Claimed | Actually |
+| --- | --- |
+| `122481` Fleetguard Air Filter P141228 | MAGNALOY INSERT M770 U |
+| `25682` Fleetguard Water Filter WF2054 | FILTER COOLANT, part no 435-5142 |
+| `32056` Fleetguard Fuel Filter FF42000 | BUTTERFLY VALVE 4" |
+| `24838` Fleetguard Fuel Filter FF105 | "Deleted" |
+
+Every row carried manufacturer `FLEETGUARD`. That value exists nowhere in the database:
+the column holds numeric codes such as `0001600022`. The `material_group` shown,
+`111010202`, does not exist either; the real value is `ZMSFT`.
+
+WF2054, FF105 and FF42000 are genuine Fleetguard catalogue numbers. So this was
+real-world brand knowledge attached to material IDs the agent had seen. Plausible facts,
+fabricated linkage, and it read perfectly.
+
+**Why the structure did not catch it.** The question carried no part number, so none of
+section A applied. There was no recipe at all for "show me the X we have", and nothing
+anchoring the answer to a result set.
+
+### Fix applied
+
+- Hard rule 14: every cell in every table comes from a query result in this conversation.
+  If a column was not in the result, leave the column out. If you hold only IDs, query
+  for the rest.
+- Hard rule 15: if a question needs a column the result lacks, say so. "The description
+  does not say which brand" is a good answer; an invented brand is not.
+- A dedicated section stating that `manufacturer` is a numeric code and brands live in
+  `material_description`, so a brand question is a description search.
+- Section F, a recipe for "show me the X we have", with a loose spelling pattern, a
+  COUNT(*) for the real total, and an instruction to say which spellings were searched.
+
+### Verified after
+
+| Case | Result |
+| --- | --- |
+| Fleetguard filters | 58 rows, **all real**, spot-checked against the master. Deletion flags shown. |
+| Donaldson filters | **44, exactly matching** the database |
+| "Which manufacturer makes 119109?" | Answered `0001600022`, stated the field holds a code, offered to investigate rather than naming a brand |
+
+**One residual gap:** P4 reported 58 where the true count is 66. The agent searched
+"Fleetguard" and "Fleetgaurd" but not "Fleedgaurd", missing 8 rows. An under-count, not
+fabrication, and it disclosed which spellings it used, so the gap is visible to the
+reader. Worth tightening if brand listings become common.
