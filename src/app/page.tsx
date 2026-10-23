@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react';
 import Image from 'next/image';
-import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2 } from 'lucide-react';
+import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2, HelpCircle } from 'lucide-react';
+import CapabilitiesPanel from '@/components/CapabilitiesPanel';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
@@ -252,6 +253,7 @@ export default function Home() {
   // question needs. Opening on one specialist made it the default for people
   // who never switched, including for questions it cannot answer.
   const [activeAgentId, setActiveAgentId] = useState<AgentId>('orchestrator');
+  const [showCapabilities, setShowCapabilities] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -725,8 +727,18 @@ export default function Home() {
               </span>
             </div>
           </div>
-          <div className="flex gap-4 text-gray-400">
-            {/* Header Actions Placeholder */}
+          <div className="flex items-center gap-4 text-gray-400">
+            {/* Opens the capability panel for whichever agent is active. The
+                label is hidden on narrow screens so the header does not wrap. */}
+            <button
+              onClick={() => setShowCapabilities(true)}
+              title={`What ${activeAgentName} can do`}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm text-gray-500
+                         hover:text-nesr-green hover:bg-nesr-green/5 transition-colors"
+            >
+              <HelpCircle size={16} />
+              <span className="hidden sm:inline">What can I do?</span>
+            </button>
           </div>
         </header>
 
@@ -876,6 +888,15 @@ export default function Home() {
         </div>
 
       </main>
+
+      {showCapabilities && (
+        <CapabilitiesPanel
+          agentId={activeAgentId}
+          agentName={activeAgentName}
+          onClose={() => setShowCapabilities(false)}
+          onPickExample={handleSuggestionClick}
+        />
+      )}
     </div>
   );
 }
