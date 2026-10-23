@@ -147,54 +147,57 @@ export const siteConfig = {
         ],
     },
 
-    /* ── Suggestions ── */
-    // Starter questions. All 25 were run against the live agents before being
-    // put here, and each is ordered fastest first, because the first bubble a
-    // user clicks sets their impression of how quick the product is.
-    // Measured response times are in the comments. Re-test before editing:
-    // a question that asks a clarifying question back, or takes a minute,
-    // reads as a worse product than it is.
+    /* ── Suggestions ──
+       Three templates then two complete questions, per agent.
+
+       The templates end in a colon on purpose: they are the everyday asks,
+       and the user finishes them with their own number or material. The two
+       complete ones underneath are there to show the product can answer
+       something they would not have thought to ask.
+
+       The complete ones were run against the live agents; measured times are
+       in the comments. Templates cannot be timed, since they are finished by
+       the user.
+
+       Pick the complete ones for whether a buyer would actually ask them, not
+       for whether they return quickly. An earlier set was chosen on speed and
+       included "how many contracted prices have already expired", which is
+       fast, truthful and of no use to anyone. */
     suggestions: {
-        // Every question routes to a different specialist, so the five
-        // together show what the orchestrator actually does. Slowest is 36s;
-        // the cross-agent version of the AF1797M question took 79s and was
-        // dropped for that reason alone.
         orchestrator: [
-            'How many contracted prices have already expired?',              // 11s
-            'How many quotations do I need before raising a purchase order?', // 15s
-            'Which suppliers are approved for laptops in HQ Dubai?',          // 21s
-            'Is AF1797M already in the system?',                              // 24s
-            'How many purchase orders are waiting for approval right now?',   // 36s
+            'Do we have a material for this, and who supplies it: ',
+            'What is the policy and the approved vendor for: ',
+            'Is it in stock, and can I raise a PR for it at plant: ',
+            'How many purchase orders are waiting for approval right now?',  // 36s
+            'Is AF1797M already in the system?',                             // 24s
         ],
         material: [
-            'Check VDC stock for material 000001100000046391',                    // 8s
-            'How many materials are flagged for deletion but still have stock?',  // 10s
-            'We need a 1/2 inch stainless ball valve. Does one already exist?',   // 19s
-            'Is AF1797M already in the system?',                                  // 22s
-            'Show me the Donaldson filters we have',                              // 23s
+            'Check VDC stock for material ID: ',
+            'Is there a duplicate part for: ',
+            'Can I create a new material for: ',
+            'We need a 1/2 inch stainless ball valve. Does one already exist?',  // 19s
+            'How many materials are flagged for deletion but still have stock?', // 10s
         ],
         logistics: [
-            'What is the policy on sole source purchases?',                   // 9s
-            'What are the incoterms rules we follow?',                        // 9s
-            'How many quotations do I need before raising a purchase order?', // 10s
-            'What is the approval threshold for a purchase order?',           // 10s
-            'How do I arrange a shipment between NESR locations?',            // 15s
+            'What is the SC policy for: ',
+            'Summarize the policy on: ',
+            'What is the procedure for: ',
+            'How many quotations do I need before raising a purchase order?',  // 10s
+            'What is the approval threshold for a purchase order?',            // 10s
         ],
         sourceguide: [
-            'How many contracted prices have already expired?',                 // 6s
-            'Which suppliers are approved for laptops in HQ Dubai?',            // 14s
-            'Which suppliers do we spend the most with?',                       // 16s
-            'Show me the approved suppliers for safety boots in Saudi Arabia',  // 20s
-            'Do we have any sole source approvals in place?',                   // 28s
+            'Which suppliers are approved for: ',
+            'What have we spent with supplier: ',
+            'Is there a sole source approval for: ',
+            'Which suppliers are approved for laptops in HQ Dubai?',  // 14s
+            'Which suppliers do we spend the most with?',             // 16s
         ],
-        // Slowest set, 35s to 57s, because these scan the largest tables.
-        // Faster phrasings were tried and were not meaningfully quicker.
         trackrequest: [
-            'Who is the bottleneck in approvals right now?',                              // 35s
-            'Which requests are stuck waiting for approval right now?',                   // 37s
-            'We received goods but no invoice has come through. Which POs are like that?', // 41s
-            'How many invoices are overdue, and what is the oldest?',                      // 53s
-            'Which open POs are past their delivery date?',                                // 57s
+            'What is the status of my request: ',
+            'Where is the shipment for PO: ',
+            'Who is holding up PR: ',
+            'Who is the bottleneck in approvals right now?',             // 35s
+            'Which requests are stuck waiting for approval right now?',   // 37s
         ],
     },
 
