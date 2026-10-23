@@ -2,8 +2,9 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react';
 import Image from 'next/image';
-import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2, HelpCircle } from 'lucide-react';
+import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2, HelpCircle, LifeBuoy } from 'lucide-react';
 import CapabilitiesPanel from '@/components/CapabilitiesPanel';
+import HelpPanel from '@/components/HelpPanel';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
@@ -13,6 +14,11 @@ import { parseMarkdownTables } from '@/lib/markdownTable';
 import { exportTablesToXlsx, safeFileName } from '@/lib/exportTables';
 
 const { agents, suggestions, thinkingWords, colors, images, text } = siteConfig;
+
+// Marks the intro video as watched. Versioned on purpose: bump the suffix when
+// the video is replaced and everyone sees the new one once, rather than only
+// people who have never signed in.
+const INTRO_SEEN_KEY = 'scai.introSeen.v1';
 
 interface Message {
   id: number;
@@ -254,6 +260,11 @@ export default function Home() {
   // who never switched, including for questions it cannot answer.
   const [activeAgentId, setActiveAgentId] = useState<AgentId>('orchestrator');
   const [showCapabilities, setShowCapabilities] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  // The intro plays once. Kept in localStorage rather than on the user record
+  // so this needed no schema change; the cost is that a new browser or a
+  // cleared cache shows it again, which for a welcome video is acceptable.
+  const [showIntro, setShowIntro] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -377,6 +388,13 @@ export default function Home() {
   useEffect(() => {
     if (status === 'authenticated') {
        fetchSessions();
+
+      try {
+        if (!localStorage.getItem(INTRO_SEEN_KEY)) setShowIntro(true);
+      } catch {
+        // Private browsing or blocked storage: skip the intro rather than
+        // showing it on every single visit.
+      }
     }
   }, [status]);
 
@@ -728,16 +746,17 @@ export default function Home() {
             </div>
           </div>
           <div className="flex items-center gap-4 text-gray-400">
-            {/* Opens the capability panel for whichever agent is active. The
-                label is hidden on narrow screens so the header does not wrap. */}
+            {/* Help stays in the header because it is needed mid-conversation,
+                unlike "What can I do?", which belongs with the greeting and
+                disappears once the chat starts. */}
             <button
-              onClick={() => setShowCapabilities(true)}
-              title={`What ${activeAgentName} can do`}
+              onClick={() => setShowHelp(true)}
+              title="Help: intro video and prompting guide"
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm text-gray-500
                          hover:text-nesr-green hover:bg-nesr-green/5 transition-colors"
             >
-              <HelpCircle size={16} />
-              <span className="hidden sm:inline">What can I do?</span>
+              <LifeBuoy size={16} />
+              <span className="hidden sm:inline">Help</span>
             </button>
           </div>
         </header>
@@ -764,6 +783,18 @@ export default function Home() {
               <h2 className="text-2xl md:text-3xl lg:text-4xl font-semibold text-gray-900 mb-2 tracking-tight text-center w-full max-w-full break-words whitespace-normal">
                 {text.welcomeGreeting(activeAgentName)}
               </h2>
+
+              {/* Sits with the greeting rather than the header, so it is next to
+                  the agent's name at the moment someone is deciding what to ask. */}
+              <button
+                onClick={() => setShowCapabilities(true)}
+                className="mb-6 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-200
+                           bg-white text-sm text-gray-500 hover:text-nesr-green hover:border-nesr-green/40
+                           hover:bg-nesr-green/5 transition-colors shadow-sm"
+              >
+                <HelpCircle size={14} />
+                What can I do?
+              </button>
               <p className="text-base md:text-lg text-gray-400 font-medium mb-10 text-center w-full max-w-full break-words whitespace-normal leading-relaxed px-2">
                 {activeAgent.description}. <br className="hidden sm:block" />
                 <span className="text-sm md:text-base opacity-80">{activeAgent.tagline}</span>
@@ -888,6 +919,18 @@ export default function Home() {
         </div>
 
       </main>
+
+      {showIntro && (
+        <HelpPanel
+          videoOnly
+          onClose={() => {
+            setShowIntro(false);
+            try { localStorage.setItem(INTRO_SEEN_KEY, new Date().toISOString()); } catch { /* storage blocked */ }
+          }}
+        />
+      )}
+
+      {showHelp && <HelpPanel onClose={() => setShowHelp(false)} />}
 
       {showCapabilities && (
         <CapabilitiesPanel

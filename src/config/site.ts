@@ -445,6 +445,73 @@ export const siteConfig = {
         },
     },
 
+    /* ── Help ──
+       Shown in the Help panel, and the video alone on a user's first visit.
+
+       The guide is not generic prompting advice. Every line comes from a way
+       these specific agents have actually gone wrong or been misread during
+       testing, so it stays useful only if it is updated when that changes. */
+    help: {
+        // SharePoint / Stream embed. Viewers must be signed in to SharePoint,
+        // which Azure AD SSO normally handles, but someone outside the tenant
+        // will see a sign-in screen rather than the video.
+        videoUrl:
+            'https://nesrcorp.sharepoint.com/sites/digitalstudio/_layouts/15/embed.aspx?UniqueId=06892c2c-54c4-485d-86f8-6e09b5c96698&embed=%7B%22ust%22%3Afalse%2C%22hv%22%3A%22CopyEmbedCode%22%7D&referrer=StreamWebApp&referrerScenario=EmbedDialog.Create',
+        videoTitle: 'Meet SCAI',
+        firstVisit: {
+            title: 'Welcome to Supply Chain AI',
+            body: 'Two minutes on what it does and how to get the most from it. You can watch it again any time from Help.',
+            dismiss: 'Get started',
+        },
+        guide: {
+            intro:
+                'These assistants read your real SAP and Power BI data. They are good at finding things and bad at guessing, so the more specific you are, the better the answer.',
+            sections: [
+                {
+                    title: 'Give it the number',
+                    tone: 'do',
+                    items: [
+                        '"Where is PR 1005026000" beats "where is my request". A reference number is the single biggest improvement you can make to an answer.',
+                        'Say the plant as a 4-digit code. Material AI will stop and ask otherwise, which costs you a round trip.',
+                        'For a supplier, use the name rather than a code. A brand is often several codes: DHL alone is seven, including a separate DHL Global Forwarding IRAQ.',
+                        'Ask one thing at a time. A paragraph with four questions gets you the weakest of four answers.',
+                    ],
+                },
+                {
+                    title: 'Things that will not work',
+                    tone: 'dont',
+                    items: [
+                        '"Show me my requests." Nothing links you to a requisition, because the requester is not stored as an email address. Give a number or a name.',
+                        'Treating a material number and a manufacturer part number as the same thing. They are different, and the digits sometimes coincide.',
+                        'Assuming a count from a table you can see. If it shows 50 rows, ask how many there are in total.',
+                        'Asking the wrong specialist. Material AI covers stock and the material master; Track My Request covers where a document has got to. SCAI picks for you if you are unsure.',
+                    ],
+                },
+                {
+                    title: 'What it genuinely cannot tell you',
+                    tone: 'cant',
+                    items: [
+                        'Where a shipment physically is. There is no AWB, container or bill of lading anywhere in the data, only how much is in transit.',
+                        'Which GRN document a receipt was posted under. The receipt, date and quantity are there; the document number is not.',
+                        'Goods issues. Only receipts are loaded.',
+                        'How much of an invoice has been part-paid. The data holds paid or not paid, nothing in between.',
+                        'HS codes. They are not held in any system we load.',
+                    ],
+                },
+                {
+                    title: 'Check these before you act',
+                    tone: 'check',
+                    items: [
+                        'Plant extension is inferred from inventory records, not the SAP material-plant master. Confirm in SAP before raising a PR against it.',
+                        'Data refreshes on a schedule, so it can sit a few hours behind SAP. Ask when it was last loaded if the timing matters.',
+                        'A material can be flagged for deletion and still look normal. Ask for the live replacement rather than using the first code you are given.',
+                        'If an answer says there are none of something, and that surprises you, ask again a different way. A wrong filter and an empty table look identical in an answer.',
+                    ],
+                },
+            ],
+        },
+    },
+
     /* ── Agents ── */
     agents: [
         {
