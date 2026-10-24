@@ -13,20 +13,46 @@ export interface AgentConfig {
     description: string;
     tagline: string;
     disclaimer: string;
+    /**
+     * The buffered webhook. For the four specialists this is also the one the
+     * orchestrator calls as a tool, so it must keep answering in plain JSON.
+     */
     webhookUrl: string;
+    /**
+     * A second webhook on the same n8n workflow, in streaming mode, for the
+     * app's own use.
+     *
+     * The specialists need two because each serves two consumers: the browser,
+     * which wants the answer as it is written, and the orchestrator, which
+     * reads it as JSON through an httpRequestTool. One webhook cannot do both,
+     * so each workflow has a streaming trigger and a buffered one feeding the
+     * same agent. The orchestrator needs no second webhook - nothing but the
+     * app consumes it - so it streams on its only one.
+     *
+     * Absent or empty falls back to webhookUrl, which still works: a buffered
+     * upstream arrives as one chunk rather than many.
+     */
+    streamWebhookUrl?: string;
     /**
      * Read this agent's reply as it is written rather than all at once.
      *
-     * Off unless stated, and deliberately per agent: the orchestrator is the
-     * only workflow nothing else consumes, so it is the only one that can be
-     * converted without breaking a caller. The four specialists are called BY
-     * the orchestrator as plain JSON over their own webhooks, and removing
-     * their Respond to Webhook node would break that read.
-     *
      * Turning this off puts an agent back on the buffered code path, which is
-     * the same code it used before streaming existed. That is the rollback.
+     * the same code it used before streaming existed. That is the rollback,
+     * and it is per agent on purpose.
      */
     streaming?: boolean;
+}
+
+/**
+ * Which webhook to call for an agent, and whether to read it as a stream.
+ *
+ * Kept here rather than at the call site so the fallbacks are stated once. A
+ * missing stream webhook is not a failure: the agent is simply asked to stream
+ * on its buffered webhook, and the whole answer arrives as a single chunk.
+ */
+export function agentEndpoint(agent: AgentConfig): { url: string; stream: boolean } {
+    if (!agent.streaming) return { url: agent.webhookUrl, stream: false };
+    return { url: agent.streamWebhookUrl || agent.webhookUrl, stream: true };
 }
 
 export const siteConfig = {
@@ -585,6 +611,8 @@ export const siteConfig = {
             tagline: 'How can I help you manage materials and inventory today?',
             disclaimer: 'Always verify stock levels before procurement',
             webhookUrl: process.env.NEXT_PUBLIC_MATERIAL_WEBHOOK || '',
+            streamWebhookUrl: process.env.NEXT_PUBLIC_MATERIAL_STREAM_WEBHOOK || '',
+            streaming: true,
         },
         {
             id: 'logistics',
@@ -594,6 +622,8 @@ export const siteConfig = {
             tagline: 'How can I help you navigate Supply Chain policies today?',
             disclaimer: 'Always verify policy details with the relevant authority',
             webhookUrl: process.env.NEXT_PUBLIC_LOGISTICS_WEBHOOK || '',
+            streamWebhookUrl: process.env.NEXT_PUBLIC_LOGISTICS_STREAM_WEBHOOK || '',
+            streaming: true,
         },
         {
             id: 'sourceguide',
@@ -603,6 +633,8 @@ export const siteConfig = {
             tagline: 'I can help you find approved suppliers and check vendor details.',
             disclaimer: 'Always confirm vendor status with procurement',
             webhookUrl: process.env.NEXT_PUBLIC_SOURCEGUIDE_WEBHOOK || '',
+            streamWebhookUrl: process.env.NEXT_PUBLIC_SOURCEGUIDE_STREAM_WEBHOOK || '',
+            streaming: true,
         },
         {
             id: 'trackrequest',
@@ -612,6 +644,8 @@ export const siteConfig = {
             tagline: 'I can track your purchase requests and shipments from approval to delivery.',
             disclaimer: 'Status may lag the source system by a few hours',
             webhookUrl: process.env.NEXT_PUBLIC_TRACKREQUEST_WEBHOOK || '',
+            streamWebhookUrl: process.env.NEXT_PUBLIC_TRACKREQUEST_STREAM_WEBHOOK || '',
+            streaming: true,
         },
     ] satisfies AgentConfig[],
 } as const;

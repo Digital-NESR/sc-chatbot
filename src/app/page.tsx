@@ -13,7 +13,7 @@ import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { siteConfig, type AgentId } from '@/config/site';
+import { siteConfig, agentEndpoint, type AgentId } from '@/config/site';
 import { parseMarkdownTables, splitByTables } from '@/lib/markdownTable';
 import { exportTablesToXlsx, safeFileName } from '@/lib/exportTables';
 import { readChatStream } from '@/lib/chatStream';
@@ -612,10 +612,11 @@ export default function Home() {
         throw new ReportedError('Could not start or load the conversation');
       }
 
-      // Per agent, from config. Only the orchestrator is converted; the rest
-      // take the buffered path below, which is the code that was here before
-      // streaming existed.
-      const wantsStream = activeAgent.streaming === true;
+      // Per agent, from config. The specialists each have a second webhook in
+      // streaming mode; the orchestrator streams on its only one. An agent
+      // with streaming off, or with no stream webhook configured, falls back
+      // to the buffered webhook without anything breaking.
+      const { url: endpoint, stream: wantsStream } = agentEndpoint(activeAgent);
 
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -623,7 +624,7 @@ export default function Home() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          webhookUrl: activeAgent.webhookUrl,
+          webhookUrl: endpoint,
           message: messageText,
           agent: activeAgent.name,
           sessionId: currentSessionId,
