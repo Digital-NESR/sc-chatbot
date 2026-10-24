@@ -22,6 +22,17 @@ import {
 
 const MARGIN = { top: 14, right: 16, bottom: 4, left: 4 };
 
+/**
+ * Headroom above the tallest mark.
+ *
+ * Without it recharts ends the axis exactly at the largest value, so the top
+ * data label sits on the top gridline and collides with the axis tick beside
+ * it - "310.0M" printed straight through "320.0M". Twelve percent is enough
+ * to clear a label at every size we draw, and the axis still starts at zero,
+ * so no bar or line is visually exaggerated.
+ */
+const HEADROOM: [number, (max: number) => number] = [0, (max: number) => (max > 0 ? max * 1.12 : 1)];
+
 export default function ChartCanvas({
     analysis,
     kind,
@@ -103,10 +114,10 @@ export default function ChartCanvas({
     if (kind === 'line') {
         return (
             <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={data} margin={MARGIN}>
+                <LineChart data={data} margin={{ ...MARGIN, left: 14, right: 28 }}>
                     <CartesianGrid {...gridProps} />
                     <XAxis dataKey="label" {...axisProps} />
-                    <YAxis {...axisProps} tickFormatter={formatAxisNumber} width={68} />
+                    <YAxis {...axisProps} tickFormatter={formatAxisNumber} width={68} domain={HEADROOM} />
                     <Tooltip {...tooltipProps} formatter={tooltipFormatter} />
                     {showLegend && <Legend {...legendProps} />}
                     {active.map(header => (
@@ -141,7 +152,7 @@ export default function ChartCanvas({
                     {...barGap}
                 >
                     <CartesianGrid {...gridProps} vertical horizontal={false} />
-                    <XAxis type="number" {...axisProps} tickFormatter={formatAxisNumber} />
+                    <XAxis type="number" {...axisProps} tickFormatter={formatAxisNumber} domain={HEADROOM} />
                     <YAxis
                         type="category"
                         dataKey="label"
@@ -197,7 +208,7 @@ export default function ChartCanvas({
                     height={angled ? 70 : 30}
                     tick={{ ...axisProps.tick, width: 400 }}
                 />
-                <YAxis {...axisProps} tickFormatter={formatAxisNumber} width={68} />
+                <YAxis {...axisProps} tickFormatter={formatAxisNumber} width={68} domain={HEADROOM} />
                 <Tooltip {...tooltipProps} formatter={tooltipFormatter} />
                 {showLegend && <Legend {...legendProps} />}
                 {active.map(header => (
