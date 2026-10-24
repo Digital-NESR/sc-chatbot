@@ -57,8 +57,9 @@ export const SOURCES: Record<SourceId, SourceDef> = {
       { schema: 'track', name: 'pr_waiting_with' },
       { schema: 'track', name: 'po_waiting_with' },
       { schema: 'track', name: 'goods_receipt' },
-      { schema: 'track', name: 'invoice' },
-      { schema: 'track', name: 'grir_open' },
+      // invoice and grir_open are gone on purpose: the invoice data is not
+      // logged reliably in SAP, so the tracked lifecycle now ends at the
+      // goods receipt. See db/track_drop_invoice.sql.
       { schema: 'track', name: 'in_transit' },
       { schema: 'track', name: 'approval_chain' },
       { schema: 'track', name: 'data_freshness' },

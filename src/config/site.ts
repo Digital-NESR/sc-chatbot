@@ -255,7 +255,7 @@ export const siteConfig = {
                     items: [
                         'Where a PR or PO has got to',
                         'Who is holding up approval, and for how long',
-                        'Delivery, invoice and payment status',
+                        'Delivery and goods receipt status',
                         'How much of an order is still in transit',
                     ],
                 },
@@ -329,14 +329,14 @@ export const siteConfig = {
                 items: [
                     'The status of one specific PR or PO',
                     'Who is holding a document up',
-                    'Whether something has been paid',
+                    'How much of an order is still to be delivered',
                 ],
             },
         },
 
         trackrequest: {
             summary:
-                'I track where your documents are in their lifecycle, from raised to approved, delivered, invoiced and paid.',
+                'I track where your documents are in their lifecycle, from raised to approved to delivered and booked in.',
             groups: [
                 {
                     title: 'Where is it',
@@ -355,11 +355,11 @@ export const siteConfig = {
                     ],
                 },
                 {
-                    title: 'Delivery & payment',
+                    title: 'Delivery & receipt',
                     items: [
                         'Whether an order has been GRN\'ed, including partial deliveries',
                         'What is still outstanding',
-                        'Whether an invoice has been paid, and what is overdue',
+                        'Every individual receipt against a line, including reversals',
                         'How much of an order is in transit',
                     ],
                 },
@@ -367,7 +367,7 @@ export const siteConfig = {
             examples: [
                 'Who is the bottleneck in approvals right now?',
                 'Which requests are stuck waiting for approval right now?',
-                'How many invoices are overdue, and what is the oldest?',
+                'Show me everything in transit for Iraq.',
                 'Which open POs are past their delivery date?',
             ],
             notFor: {
@@ -527,7 +527,7 @@ export const siteConfig = {
                         'Where a shipment physically is. There is no AWB or container number anywhere, only how much is in transit.',
                         'Which GRN document a receipt was posted under. The receipt is there; the document number is not.',
                         'Goods issues. Only receipts are loaded.',
-                        'How much of an invoice was part-paid. It is paid or not paid, nothing between.',
+                        'Anything about invoices or payment. The invoice data is not logged reliably in SAP, so tracking ends at the goods receipt.',
                         'HS codes. Not held in any system we read.',
                     ],
                 },
