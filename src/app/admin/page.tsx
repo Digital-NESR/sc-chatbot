@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { ChevronRight, ArrowLeft, Loader2, User, MessageSquare, Users, Activity, BarChart2, ThumbsUp, ThumbsDown } from 'lucide-react';
+import Link from 'next/link';
+import { ChevronRight, ArrowLeft, Loader2, User, MessageSquare, Users, Activity, BarChart2, ThumbsDown } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { siteConfig } from '@/config/site';
@@ -39,11 +40,8 @@ export default function AdminDashboard() {
     const [messages, setMessages] = useState<any[]>([]);
     const [loadingMessages, setLoadingMessages] = useState(false);
 
-    // Everything a user has rated. Thumbs-down first - see the route.
-    const [feedback, setFeedback] = useState<any[]>([]);
-    const [feedbackCounts, setFeedbackCounts] = useState({ up: 0, down: 0 });
-    const [loadingFeedback, setLoadingFeedback] = useState(true);
-    const [feedbackFilter, setFeedbackFilter] = useState<'down' | 'all'>('down');
+    // Just the headline number here; reviewing them happens on /admin/feedback.
+    const [openDown, setOpenDown] = useState<number | null>(null);
 
     // Fetch users on load
     useEffect(() => {
@@ -65,20 +63,15 @@ export default function AdminDashboard() {
         fetchUsers();
     }, []);
 
-    // Fetch rated answers on load
+    // How much feedback is waiting, so the dashboard says so without being
+    // the place you work through it.
     useEffect(() => {
         const fetchFeedback = async () => {
             try {
                 const res = await fetch('/api/admin/feedback');
-                if (res.ok) {
-                    const data = await res.json();
-                    setFeedback(data.items || []);
-                    setFeedbackCounts({ up: data.up || 0, down: data.down || 0 });
-                }
+                if (res.ok) setOpenDown((await res.json()).openDown ?? 0);
             } catch (err) {
                 console.error(err);
-            } finally {
-                setLoadingFeedback(false);
             }
         };
         fetchFeedback();
@@ -402,7 +395,7 @@ export default function AdminDashboard() {
     return (
         <div className="flex flex-col gap-6">
             {/* KPI Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col items-center justify-center text-center">
                     <Users className="w-6 h-6 text-[#307c4c] mb-2" />
                     <p className="text-sm font-medium text-slate-500 uppercase tracking-wider">Total Users</p>
@@ -423,6 +416,16 @@ export default function AdminDashboard() {
                     <p className="text-sm font-medium text-slate-500 uppercase tracking-wider">Active Today</p>
                     <p className="text-3xl font-bold text-[#307c4c] mt-1">{activeTodayCount}</p>
                 </div>
+                <Link
+                    href="/admin/feedback"
+                    className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col items-center justify-center text-center hover:border-[#307c4c]/40 transition-colors"
+                >
+                    <ThumbsDown className="w-6 h-6 text-[#307c4c] mb-2" />
+                    <p className="text-sm font-medium text-slate-500 uppercase tracking-wider">To Review</p>
+                    <p className={`text-3xl font-bold mt-1 ${openDown ? 'text-red-500' : 'text-slate-800'}`}>
+                        {openDown ?? '—'}
+                    </p>
+                </Link>
             </div>
 
             {/* Recharts Analytics */}
@@ -516,103 +519,6 @@ export default function AdminDashboard() {
                             <p>No time-series data available</p>
                         </div>
                     )}
-                </div>
-            </div>
-
-            {/* What users thought of the answers */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-                <div className="p-4 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div>
-                        <h2 className="text-lg font-semibold text-slate-800">Answer Feedback</h2>
-                        <p className="text-sm text-slate-500">
-                            What users rated, newest first. Click one to open the conversation it came from.
-                        </p>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                        <span className="flex items-center gap-1.5 text-sm text-emerald-600">
-                            <ThumbsUp className="w-4 h-4" /> {feedbackCounts.up}
-                        </span>
-                        <span className="flex items-center gap-1.5 text-sm text-red-500">
-                            <ThumbsDown className="w-4 h-4" /> {feedbackCounts.down}
-                        </span>
-                        <div className="flex items-center gap-0.5 rounded-lg bg-slate-100 p-0.5 ml-2">
-                            {(['down', 'all'] as const).map(f => (
-                                <button
-                                    key={f}
-                                    onClick={() => setFeedbackFilter(f)}
-                                    className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                                        feedbackFilter === f ? 'bg-white shadow-sm text-[#307c4c]' : 'text-slate-600 hover:text-slate-900'
-                                    }`}
-                                >
-                                    {f === 'down' ? 'Needs review' : 'All'}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
-                <div className="max-h-[420px] overflow-y-auto divide-y divide-slate-100">
-                    {loadingFeedback ? (
-                        <div className="flex items-center justify-center py-12">
-                            <Loader2 className="w-7 h-7 animate-spin text-[#307c4c]" />
-                        </div>
-                    ) : (() => {
-                        const shown = feedbackFilter === 'down'
-                            ? feedback.filter(f => f.feedback === 'down')
-                            : feedback;
-                        if (shown.length === 0) {
-                            return (
-                                <p className="text-center text-slate-400 py-12 text-sm">
-                                    {feedbackFilter === 'down'
-                                        ? 'Nothing rated thumbs-down yet.'
-                                        : 'No answers have been rated yet.'}
-                                </p>
-                            );
-                        }
-                        return shown.map(f => (
-                            <button
-                                key={f.id}
-                                onClick={() => {
-                                    setSelectedUser({ email: f.userEmail, displayName: f.userEmail });
-                                    setSelectedSession({
-                                        id: f.sessionId,
-                                        title: f.sessionTitle,
-                                        botId: f.botId,
-                                        createdAt: f.feedbackAt,
-                                    });
-                                }}
-                                className="w-full text-left px-4 sm:px-6 py-4 hover:bg-[#307c4c]/5 transition-colors flex gap-4"
-                            >
-                                <span className={`mt-0.5 shrink-0 ${f.feedback === 'down' ? 'text-red-400' : 'text-emerald-500'}`}>
-                                    {f.feedback === 'down'
-                                        ? <ThumbsDown className="w-4 h-4" fill="currentColor" />
-                                        : <ThumbsUp className="w-4 h-4" fill="currentColor" />}
-                                </span>
-                                <span className="min-w-0 flex-1">
-                                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500 mb-1">
-                                        <span className="font-medium text-slate-700">{getAgentName(f.botId)}</span>
-                                        <span>•</span>
-                                        <span className="truncate max-w-[220px]">{f.userEmail}</span>
-                                        {f.feedbackAt && (
-                                            <>
-                                                <span>•</span>
-                                                <span>{new Date(f.feedbackAt).toLocaleDateString()}</span>
-                                            </>
-                                        )}
-                                    </span>
-                                    {/* The question first: an answer on its own rarely
-                                        says what went wrong with it. */}
-                                    {f.question && (
-                                        <span className="block text-sm text-slate-800 font-medium line-clamp-2 mb-1">
-                                            {f.question}
-                                        </span>
-                                    )}
-                                    <span className="block text-sm text-slate-500 line-clamp-2">{f.content}</span>
-                                </span>
-                                <ChevronRight className="w-5 h-5 text-slate-300 shrink-0 self-center" />
-                            </button>
-                        ));
-                    })()}
                 </div>
             </div>
 

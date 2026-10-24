@@ -46,5 +46,13 @@ model Message {
   feedback   String?
   feedbackAt DateTime?
 
+  // Triage, written from /admin/feedback rather than by the user. The note is
+  // what was actually wrong with the answer, which the thumb on its own never
+  // says; reviewStatus is 'resolved' once it has been dealt with, and null
+  // while it is still open.
+  reviewNote   String?   @db.Text
+  reviewStatus String?
+  reviewedAt   DateTime?
+
   session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }

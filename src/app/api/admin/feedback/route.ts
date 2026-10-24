@@ -24,7 +24,7 @@ export async function GET() {
         const rated = await prisma.message.findMany({
             where: { feedback: { not: null } },
             orderBy: { feedbackAt: 'desc' },
-            take: 200,
+            take: 300,
             select: {
                 id: true,
                 sessionId: true,
@@ -32,6 +32,9 @@ export async function GET() {
                 feedback: true,
                 feedbackAt: true,
                 createdAt: true,
+                reviewNote: true,
+                reviewStatus: true,
+                reviewedAt: true,
                 session: { select: { botId: true, title: true, userEmail: true } },
             },
         });
@@ -65,13 +68,20 @@ export async function GET() {
             userEmail: m.session.userEmail,
             feedback: m.feedback,
             feedbackAt: m.feedbackAt,
+            answeredAt: m.createdAt,
             question: askedBefore(m.sessionId, m.createdAt),
             content: m.content,
+            reviewNote: m.reviewNote,
+            reviewStatus: m.reviewStatus,
+            reviewedAt: m.reviewedAt,
         }));
 
-        // Thumbs-down first: it is the half anyone acts on.
+        // Open thumbs-down first: it is the half anyone acts on. Resolved ones
+        // sink, so the top of the list is always the work that is left.
+        const rank = (i: (typeof items)[number]) =>
+            i.reviewStatus === 'resolved' ? 2 : i.feedback === 'down' ? 0 : 1;
         items.sort((a, b) => {
-            if (a.feedback !== b.feedback) return a.feedback === 'down' ? -1 : 1;
+            if (rank(a) !== rank(b)) return rank(a) - rank(b);
             return (b.feedbackAt?.getTime() ?? 0) - (a.feedbackAt?.getTime() ?? 0);
         });
 
@@ -79,9 +89,58 @@ export async function GET() {
             items,
             up: items.filter(i => i.feedback === 'up').length,
             down: items.filter(i => i.feedback === 'down').length,
+            openDown: items.filter(i => i.feedback === 'down' && i.reviewStatus !== 'resolved').length,
+            fetchedAt: new Date().toISOString(),
         });
     } catch (error) {
         console.error('Failed to fetch feedback:', error);
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    }
+}
+
+/**
+ * Triage one rated answer: what was wrong with it, and whether it is done.
+ *
+ * Separate from the user's own thumb, which is never overwritten here. The
+ * thumb says someone was unhappy; the note says why, and that is the part
+ * worth keeping, because by the time anyone looks the conversation that
+ * produced it is cold.
+ */
+export async function PATCH(request: Request) {
+    const session = await getServerSession(authOptions);
+    if (!isAdmin(session?.user?.email)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    try {
+        const { messageId, reviewNote, reviewStatus } = await request.json();
+
+        if (!messageId || typeof messageId !== 'string') {
+            return NextResponse.json({ error: 'Missing messageId' }, { status: 400 });
+        }
+        if (reviewStatus !== undefined && reviewStatus !== null && reviewStatus !== 'resolved') {
+            return NextResponse.json({ error: 'reviewStatus must be "resolved" or null' }, { status: 400 });
+        }
+
+        const data: { reviewNote?: string | null; reviewStatus?: string | null; reviewedAt?: Date | null } = {};
+        if (reviewNote !== undefined) data.reviewNote = reviewNote || null;
+        if (reviewStatus !== undefined) {
+            data.reviewStatus = reviewStatus;
+            data.reviewedAt = reviewStatus ? new Date() : null;
+        }
+        if (Object.keys(data).length === 0) {
+            return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
+        }
+
+        const updated = await prisma.message.update({
+            where: { id: messageId },
+            data,
+            select: { id: true, reviewNote: true, reviewStatus: true, reviewedAt: true },
+        });
+
+        return NextResponse.json({ success: true, ...updated });
+    } catch (error) {
+        console.error('Failed to save review:', error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }
