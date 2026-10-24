@@ -173,7 +173,7 @@ export function splitByTables(markdown: string): MessageSegment[] {
  * one badly formatted answer degrades into a readable one instead of a broken
  * one.
  */
-export function normalizeInlineHtml(markdown: string): string {
+function stripInlineHtml(markdown: string): string {
     if (!markdown.includes('<')) return markdown;
     return markdown
         .split('\n')
@@ -182,4 +182,48 @@ export function normalizeInlineHtml(markdown: string): string {
             return line.replace(/<br\s*\/?>/gi, isRow ? '; ' : ' ');
         })
         .join('\n');
+}
+
+/**
+ * Repairs a delimiter row whose cell count does not match its header.
+ *
+ * GitHub-flavoured Markdown requires the two to match exactly; when they do
+ * not, the block is not a table at all and renders as a wall of pipes. An
+ * agent that writes six headers and five dashes has still told us everything
+ * we need - the header row says how many columns there are - so the row is
+ * rebuilt rather than the whole table thrown away.
+ *
+ * Only ever touches a row that is already nothing but dashes, colons and
+ * pipes, so it cannot damage a row carrying data.
+ */
+function repairTableDelimiters(markdown: string): string {
+    const lines = markdown.split('\n');
+    const cells = (line: string) =>
+        line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').length;
+
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line.includes('-') || !/^\s*\|?[\s:|-]*\|[\s:|-]*$/.test(line)) continue;
+
+        const header = lines[i - 1];
+        if (!header.trim().startsWith('|')) continue;
+
+        const want = cells(header);
+        if (cells(line) === want) continue;
+
+        const indent = line.match(/^\s*/)?.[0] ?? '';
+        lines[i] = indent + '|' + Array(want).fill('---').join('|') + '|';
+    }
+    return lines.join('\n');
+}
+
+/**
+ * Everything an answer's Markdown needs before it is parsed or rendered.
+ *
+ * Both repairs exist for the same reason: one formatting slip in an answer
+ * should cost that detail, not the whole table. The agents are told not to
+ * make either mistake; this is what happens when one gets through anyway.
+ */
+export function normalizeAnswerMarkdown(markdown: string): string {
+    return repairTableDelimiters(stripInlineHtml(markdown));
 }

@@ -15,7 +15,7 @@ import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { siteConfig, agentEndpoint, type AgentId } from '@/config/site';
-import { parseMarkdownTables, splitByTables, normalizeInlineHtml } from '@/lib/markdownTable';
+import { parseMarkdownTables, splitByTables, normalizeAnswerMarkdown } from '@/lib/markdownTable';
 import { splitDerivation } from '@/lib/derivation';
 import { exportTablesToXlsx, safeFileName } from '@/lib/exportTables';
 import { readChatStream } from '@/lib/chatStream';
@@ -173,9 +173,10 @@ const AssistantBubble = memo(function AssistantBubble({
   // charting the method rather than the data.
   const { body: rawBody, derivation } = useMemo(() => splitDerivation(content), [content]);
 
-  // Inline HTML out before anything parses or renders this - a <br> in a cell
-  // shows as literal text and stops the column parsing as a number.
-  const body = useMemo(() => normalizeInlineHtml(rawBody), [rawBody]);
+  // Repair the answer's Markdown before anything parses or renders it: a
+  // <br> in a cell shows as literal text and stops the column parsing as a
+  // number, and a miscounted delimiter row stops the table being a table.
+  const body = useMemo(() => normalizeAnswerMarkdown(rawBody), [rawBody]);
 
   // Only messages that actually contain a Markdown table get an export button.
   const tables = useMemo(() => parseMarkdownTables(body), [body]);
