@@ -8,6 +8,7 @@ import HelpPanel from '@/components/HelpPanel';
 import ChartBlock from '@/components/ChartBlock';
 import BetaBadge from '@/components/BetaBadge';
 import StreamingMarkdown from '@/components/StreamingMarkdown';
+import FreshnessIndicator from '@/components/FreshnessIndicator';
 import { markdownComponents } from '@/components/markdownComponents';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
@@ -24,6 +25,12 @@ const { agents, suggestions, thinkingWords, colors, images, text, help } = siteC
 // the video is replaced and everyone sees the new one once, rather than only
 // people who have never signed in.
 const INTRO_SEEN_KEY = 'scai.introSeen.v1';
+
+/* Which agents read the SAP extract that track.data_freshness describes.
+   SC Policy AI answers from policy documents in a vector store and SourceGuide
+   AI from three other databases, none of which this load time covers - showing
+   it there would be a claim about data they never touch. */
+const FRESHNESS_AGENTS = new Set<AgentId>(['orchestrator', 'material', 'trackrequest']);
 
 interface Message {
   // Local only, and only ever a React key. Fresh messages get a timestamp;
@@ -1272,9 +1279,20 @@ export default function Home() {
               )}
             </div>
 
-            <p className="text-center text-[10px] text-gray-400 mt-3 font-medium tracking-wide">
-              {text.disclaimer(activeAgent.disclaimer)}
-            </p>
+            <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 mt-3">
+              <p className="text-center text-[10px] text-gray-400 font-medium tracking-wide">
+                {text.disclaimer(activeAgent.disclaimer)}
+              </p>
+              {/* Only for the agents that actually read the SAP extract. On
+                  SC Policy AI or SourceGuide AI this load time would be a
+                  claim about data they do not use. */}
+              {FRESHNESS_AGENTS.has(activeAgentId) && (
+                <>
+                  <span className="text-[10px] text-gray-300">•</span>
+                  <FreshnessIndicator />
+                </>
+              )}
+            </div>
           </div>
         </div>
 
