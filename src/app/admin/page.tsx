@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { siteConfig } from '@/config/site';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Brush } from 'recharts';
+import { seriesColor } from '@/lib/chartTheme';
 
 // Helper to get agent name
 const getAgentName = (botId: string) => {
@@ -173,7 +174,6 @@ export default function AdminDashboard() {
         return from === to ? fmt(from) : `${fmt(from)} – ${fmt(to)} · ${days} days`;
     })();
 
-    const chartColors = ['#e11d48', '#0284c7', '#d97706', '#7c3aed', '#10b981', '#f43f5e', '#3b82f6'];
     // -----------------------------------------------------------------
 
     // Level 3: Transcript View
@@ -452,7 +452,7 @@ export default function AdminDashboard() {
                                 />
                                 <Legend wrapperStyle={{ paddingTop: '20px' }} />
                                 {chartMode === 'combined' ? (
-                                    <Line type="monotone" dataKey="totalSessions" name="Total Sessions" stroke="#307c4c" strokeWidth={3} dot={{r: 4}} activeDot={{r: 6}} />
+                                    <Line type="monotone" dataKey="totalSessions" name="Total Sessions" stroke={seriesColor(0)} strokeWidth={3} dot={{r: 4}} activeDot={{r: 6}} />
                                 ) : (
                                     uniqueAgents.map((agent, idx) => (
                                         <Line 
@@ -460,7 +460,7 @@ export default function AdminDashboard() {
                                             type="monotone" 
                                             dataKey={(d) => d.agents[agent.id] || 0} 
                                             name={agent.name} 
-                                            stroke={idx === 0 ? '#307c4c' : chartColors[idx % chartColors.length]} 
+                                            stroke={seriesColor(idx)} 
                                             strokeWidth={2} 
                                             dot={{r: 3}} 
                                             activeDot={{r: 5}} 

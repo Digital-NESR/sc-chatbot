@@ -36,6 +36,23 @@ export const siteConfig = {
 
         // Fallback avatar
         fallbackAvatarBg: '#307c4c',
+
+        /* Categorical series palette for charts, used by both the chat chart
+           panel and /admin. Assigned in fixed order and never cycled: slot 1 is
+           the brand green, so a single-series chart matches the rest of the
+           product, and a chart keeps its colours when a series is filtered out.
+
+           Five slots is the cap, not an oversight. Beyond five, hues this far
+           apart stop being distinguishable under red-green colour blindness.
+           These five were checked pairwise for that; if you change one, check
+           the replacement rather than picking by eye. */
+        chartSeries: ['#307c4c', '#1f6feb', '#d97706', '#a21caf', '#9a3412'],
+
+        // Chart furniture. Recessive on purpose: the grid is a reading aid,
+        // not something to look at.
+        chartGrid: '#ececec',
+        chartAxis: '#d4d4d4',
+        chartLabel: '#6b7280',
     },
 
     /* ── Images ── */
@@ -69,6 +86,8 @@ export const siteConfig = {
         // Table export
         exportTable: 'Export table to Excel',
         exportFilePrefix: 'SupplyChainAI',
+        chartTable: 'Chart this table',
+        chartPanelTitle: 'Chart',
 
         errorMessage:
             'Detailed error: Unable to connect to the agent. Please try again later.',

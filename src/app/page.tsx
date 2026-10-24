@@ -2,15 +2,17 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react';
 import Image from 'next/image';
-import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2, HelpCircle, PlayCircle, Lightbulb } from 'lucide-react';
+import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, BarChart3, Loader2, HelpCircle, PlayCircle, Lightbulb } from 'lucide-react';
 import CapabilitiesPanel from '@/components/CapabilitiesPanel';
 import HelpPanel from '@/components/HelpPanel';
+import ChartPanel from '@/components/ChartPanel';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { siteConfig, type AgentId } from '@/config/site';
 import { parseMarkdownTables } from '@/lib/markdownTable';
+import { hasChartableTable } from '@/lib/chartData';
 import { exportTablesToXlsx, safeFileName } from '@/lib/exportTables';
 
 const { agents, suggestions, thinkingWords, colors, images, text, help } = siteConfig;
@@ -89,9 +91,15 @@ function AssistantBubble({ content, agentName }: { content: string; agentName: s
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [showChart, setShowChart] = useState(false);
 
   // Only messages that actually contain a Markdown table get an export button.
   const tables = useMemo(() => parseMarkdownTables(content), [content]);
+
+  // Narrower than the export test: a list of material codes exports happily
+  // but charts as nonsense, so the chart button only appears when at least one
+  // table has a label column and something real to measure.
+  const chartable = useMemo(() => hasChartableTable(tables), [tables]);
 
   const handleCopy = async () => {
     try {
@@ -193,6 +201,18 @@ function AssistantBubble({ content, agentName }: { content: string; agentName: s
 
       {/* ── Action Bar ── */}
       <div className="flex items-center justify-end gap-0.5 -mr-1 mt-1.5 opacity-60 hover:opacity-100 transition-opacity duration-200">
+        {/* Chart — only when the data is actually shaped for one */}
+        {chartable && (
+          <button
+            onClick={() => setShowChart(true)}
+            aria-label={text.chartTable}
+            title={text.chartTable}
+            className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors duration-150"
+          >
+            <BarChart3 size={14} />
+          </button>
+        )}
+
         {/* Export tables to Excel — only rendered when the message has one */}
         {tables.length > 0 && (
           <button
@@ -247,6 +267,14 @@ function AssistantBubble({ content, agentName }: { content: string; agentName: s
           <ThumbsDown size={14} fill={feedback === 'down' ? 'currentColor' : 'none'} />
         </button>
       </div>
+
+      {showChart && (
+        <ChartPanel
+          tables={tables}
+          title={`${agentName} · ${text.chartPanelTitle}`}
+          onClose={() => setShowChart(false)}
+        />
+      )}
     </div>
   );
 }
