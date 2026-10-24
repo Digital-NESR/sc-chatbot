@@ -12,13 +12,36 @@ const insecureAgent = new https.Agent({ rejectUnauthorized: false });
 // the request off and the user sees a network error rather than an answer.
 export const maxDuration = 300;
 
+// Deliberately under maxDuration. Without a timeout of our own, a hung n8n
+// holds the request until the platform kills the function at 300s, and the
+// user sees nothing at all for five minutes. Failing at 280 leaves room to
+// return a real error instead.
+const UPSTREAM_TIMEOUT_MS = 280_000;
+
+/** Thrown on our own deadline, so the handler can tell it apart from a socket error. */
+class UpstreamTimeout extends Error {
+    constructor() {
+        super(`Agent did not respond within ${Math.round(UPSTREAM_TIMEOUT_MS / 1000)}s`);
+        this.name = 'UpstreamTimeout';
+    }
+}
+
 /**
  * Makes an HTTP/HTTPS POST request using Node's native modules,
  * bypassing the Next.js fetch wrapper which can't use a custom SSL agent.
  * Resolves with the status code alongside the body so the caller can tell a
  * real agent reply apart from an n8n error page.
+ *
+ * `signal` is the incoming request's. When the browser goes away - tab closed,
+ * navigation, a cancelled send - there is no point holding the upstream call
+ * open. Propagation is best effort: not every platform tells a serverless
+ * function that its client disconnected.
  */
-function makeRequest(url: string, body: string): Promise<{ status: number; body: string }> {
+function makeRequest(
+    url: string,
+    body: string,
+    signal?: AbortSignal,
+): Promise<{ status: number; body: string }> {
     return new Promise((resolve, reject) => {
         const parsed = new URL(url);
         const isHttps = parsed.protocol === 'https:';
@@ -38,10 +61,27 @@ function makeRequest(url: string, body: string): Promise<{ status: number; body:
         const req = (isHttps ? https : http).request(options, (res) => {
             let data = '';
             res.on('data', (chunk) => (data += chunk));
-            res.on('end', () => resolve({ status: res.statusCode ?? 0, body: data }));
+            res.on('end', () => {
+                cleanup();
+                resolve({ status: res.statusCode ?? 0, body: data });
+            });
         });
 
-        req.on('error', reject);
+        // Covers a socket that connects and then goes quiet, which is the shape
+        // a stalled workflow takes. The agent needs destroying explicitly:
+        // 'timeout' only fires the event, it does not end the request.
+        req.setTimeout(UPSTREAM_TIMEOUT_MS, () => {
+            req.destroy(new UpstreamTimeout());
+        });
+
+        const onAbort = () => req.destroy(new DOMException('Client disconnected', 'AbortError'));
+        signal?.addEventListener('abort', onAbort);
+        const cleanup = () => signal?.removeEventListener('abort', onAbort);
+
+        req.on('error', (err) => {
+            cleanup();
+            reject(err);
+        });
         req.write(body);
         req.end();
     });
@@ -75,7 +115,11 @@ export async function POST(request: Request) {
         }
 
         const requestBody = JSON.stringify({ message, agent, sessionId });
-        const { status, body: responseText } = await makeRequest(webhookUrl, requestBody);
+        const { status, body: responseText } = await makeRequest(
+            webhookUrl,
+            requestBody,
+            request.signal,
+        );
 
         // n8n answers with a non-2xx JSON body for its own failures (inactive
         // workflow, unregistered webhook, node error). Without this check those
@@ -101,6 +145,21 @@ export async function POST(request: Request) {
 
         return NextResponse.json(data);
     } catch (error) {
+        // A client that went away is not a failure worth a 500 and a stack
+        // trace in the logs; nobody is waiting for the response.
+        if (error instanceof Error && error.name === 'AbortError') {
+            console.log('[/api/chat] Client disconnected before the agent replied');
+            return new NextResponse(null, { status: 499 });
+        }
+
+        if (error instanceof UpstreamTimeout) {
+            console.error('[/api/chat]', error.message);
+            return NextResponse.json(
+                { error: 'Agent timed out', detail: error.message },
+                { status: 504 }
+            );
+        }
+
         console.error('[/api/chat] Proxy Error:', error);
         return NextResponse.json(
             { error: 'Internal Server Error', detail: String(error) },

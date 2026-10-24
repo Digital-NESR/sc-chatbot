@@ -277,6 +277,15 @@ export default function Home() {
 
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Holds the in-flight agent request so it can be dropped when the user moves
+  // on. Without this an answer can arrive after the view has been cleared and
+  // render into whatever conversation is open now.
+  const abortRef = useRef<AbortController | null>(null);
+
+  const abortInFlight = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+  };
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const autoResize = () => {
@@ -361,6 +370,7 @@ export default function Home() {
   };
 
   const loadSessionHistory = async (sessionId: string, botId: string) => {
+    abortInFlight();
     try {
       setIsLoading(true);
       const res = await fetch(`/api/chat/history?sessionId=${sessionId}`);
@@ -402,6 +412,7 @@ export default function Home() {
   if (status === 'loading' || status === 'unauthenticated') return null;
 
   const handleAgentChange = (id: AgentId) => {
+    abortInFlight();
     setActiveAgentId(id);
     setActiveSessionId(null);
     setMessages([]); // Clear chat effectively starts new session
@@ -440,6 +451,9 @@ export default function Home() {
     setMessages(prev => [...prev, newUserMessage]);
     setIsLoading(true);
 
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
       // 1. Save user message to database
       let currentSessionId = activeSessionId;
@@ -467,6 +481,15 @@ export default function Home() {
         console.error('Failed to save user message:', err);
       }
 
+      // The session id is the memory key n8n groups a conversation by, AND the
+      // row the reply gets written to. A random fallback here used to hide a
+      // failed save: the agent silently lost the thread, and the answer was
+      // never persisted either, because currentSessionId stayed falsy. Better
+      // to say so than to half-work.
+      if (!currentSessionId) {
+        throw new Error('Could not start or load the conversation');
+      }
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -476,8 +499,9 @@ export default function Home() {
           webhookUrl: activeAgent.webhookUrl,
           message: messageText,
           agent: activeAgent.name,
-          sessionId: currentSessionId || crypto.randomUUID(),
+          sessionId: currentSessionId,
         }),
+        signal: controller.signal,
       });
 
       // If the backend returned a non-ok status, show the generic error
@@ -504,14 +528,18 @@ export default function Home() {
       }
 
       // ── Sanity Check: intercept leaked JSON or garbage responses ──
+      //
+      // This used to reject anything CONTAINING the substring '"error"'
+      // anywhere, which binned legitimate answers: an agent explaining a data
+      // quality problem, or quoting a column value, lost its whole reply. The
+      // check now only fires when the response IS a JSON envelope rather than
+      // prose that happens to mention one.
       const trimmed = aiContent.trim();
-      if (
-        trimmed.startsWith('{') ||
-        trimmed.startsWith('[') ||
-        trimmed.includes('{"output":') ||
-        trimmed.includes('"error"') ||
-        !trimmed
-      ) {
+      const looksLikeRawJson =
+        (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+        (trimmed.startsWith('[') && trimmed.endsWith(']'));
+
+      if (!trimmed || looksLikeRawJson || trimmed.startsWith('{"output":')) {
         console.warn('Intercepted malformed AI response:', trimmed.slice(0, 200));
         aiContent = text.genericError;
       }
@@ -539,6 +567,13 @@ export default function Home() {
       }
 
     } catch (error) {
+      // Abandoned on purpose - the user switched agent or opened another
+      // conversation. Nothing to show, and the input belongs to the view they
+      // left rather than the one they are looking at.
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return;
+      }
+
       // Network failure, timeout, or unexpected crash — show as a normal assistant bubble
       console.error("Failed to send message:", error);
       setMessages(prev => [...prev, {
@@ -546,8 +581,18 @@ export default function Home() {
         role: 'assistant',
         content: text.genericError,
       }]);
+      // Hand the text back. It was cleared optimistically on send, and losing
+      // a long question to a network blip is worse than a briefly odd input box.
+      setInputValue(prev => (prev.trim() ? prev : messageText));
     } finally {
-      setIsLoading(false);
+      // Only the request that is still current may clear the loading state.
+      // An aborted one settles a tick after its replacement has already set
+      // it, and would otherwise switch off the spinner for the new view.
+      // abortInFlight() nulls the ref, so a superseded request fails this test.
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        setIsLoading(false);
+      }
     }
   };
 
