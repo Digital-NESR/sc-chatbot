@@ -50,6 +50,18 @@ export function parseNumericCell(raw: string | null | undefined): NumericCell | 
     if (/-$/.test(s)) { negative = true; s = s.slice(0, -1).trim(); }
     if (/^-/.test(s)) { negative = true; s = s.slice(1).trim(); }
 
+    /* A price per unit: '$0.53/GAL', '2.00 SAR/GAL', '12.50 USD/TON'.
+       Procurement data is full of these and none of them parsed, which cost a
+       supplier comparison its whole chart: the only two columns worth plotting
+       were both rates.
+
+       The denominator must be letters. That is what keeps '1/2' and
+       '27/07/2025' out - in both the part after the slash is a number, so
+       neither is a rate and both stay unparseable, which is correct. */
+    let per: string | null = null;
+    const rate = s.match(/^(.*?)\s*\/\s*([A-Za-z]{1,6})\.?$/);
+    if (rate && rate[1]) { per = rate[2].toUpperCase(); s = rate[1].trim(); }
+
     const parts = s.split(/\s+/);
     if (parts.length > 1 && CURRENCY.test(parts[0])) {
         unit = parts.shift()!.toUpperCase();
@@ -76,6 +88,11 @@ export function parseNumericCell(raw: string | null | undefined): NumericCell | 
 
     const value = Number(s);
     if (!Number.isFinite(value)) return null;
+
+    // '$' per 'GAL' is one unit, '$/GAL'. Keeping them joined means a column
+    // of $/GAL and a column of $/TON are correctly seen as different scales.
+    if (per) unit = unit ? `${unit}/${per}` : `/${per}`;
+
     return { value: negative ? -value : value, unit };
 }
 
