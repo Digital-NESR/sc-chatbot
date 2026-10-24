@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo, memo } from 'react';
 import Image from 'next/image';
-import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2, HelpCircle, PlayCircle, Lightbulb, Square } from 'lucide-react';
+import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2, HelpCircle, PlayCircle, Lightbulb, Square, Microscope, ChevronRight } from 'lucide-react';
 import CapabilitiesPanel from '@/components/CapabilitiesPanel';
 import HelpPanel from '@/components/HelpPanel';
 import ChartBlock from '@/components/ChartBlock';
@@ -16,6 +16,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { siteConfig, agentEndpoint, type AgentId } from '@/config/site';
 import { parseMarkdownTables, splitByTables } from '@/lib/markdownTable';
+import { splitDerivation } from '@/lib/derivation';
 import { exportTablesToXlsx, safeFileName } from '@/lib/exportTables';
 import { readChatStream } from '@/lib/chatStream';
 
@@ -164,13 +165,20 @@ const AssistantBubble = memo(function AssistantBubble({
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(initialFeedback);
   const [exporting, setExporting] = useState(false);
+  const [showDerivation, setShowDerivation] = useState(false);
+
+  // The answer, and the note about how it was reached, which every agent is
+  // told to put at the end. Split before anything else looks at the content:
+  // the note is prose about the query, so charting or exporting it would be
+  // charting the method rather than the data.
+  const { body, derivation } = useMemo(() => splitDerivation(content), [content]);
 
   // Only messages that actually contain a Markdown table get an export button.
-  const tables = useMemo(() => parseMarkdownTables(content), [content]);
+  const tables = useMemo(() => parseMarkdownTables(body), [body]);
 
   // The same answer, cut into prose and tables, so each table can offer its
   // own chart views where it stands.
-  const segments = useMemo(() => splitByTables(content), [content]);
+  const segments = useMemo(() => splitByTables(body), [body]);
 
   const handleCopy = async () => {
     try {
@@ -243,6 +251,35 @@ const AssistantBubble = memo(function AssistantBubble({
             </ReactMarkdown>
           </ChartBlock>
         )
+      )}
+
+      {/* How the answer was reached. Collapsed, because on a good answer
+          nobody needs it - and because an explanation shown on every answer is
+          one nobody reads. It is there for the answer that looks wrong, where
+          the filter is usually what was wrong. */}
+      {derivation && (
+        <div className="mt-2 pt-1.5 border-t border-slate-200/70">
+          <button
+            onClick={() => setShowDerivation(v => !v)}
+            aria-expanded={showDerivation}
+            className="inline-flex items-center gap-1 text-[10.5px] text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            <Microscope size={11} />
+            {text.derivationLabel}
+            <ChevronRight
+              size={10}
+              className={`transition-transform ${showDerivation ? 'rotate-90' : ''}`}
+            />
+          </button>
+
+          {showDerivation && (
+            <div className="mt-1.5 rounded-lg bg-white/70 border border-slate-200 px-3 py-2 text-[12px] leading-[1.55] text-slate-600">
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                {derivation}
+              </ReactMarkdown>
+            </div>
+          )}
+        </div>
       )}
 
       {/* ── Action Bar ── */}

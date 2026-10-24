@@ -141,6 +141,9 @@ export const siteConfig = {
         genericError:
             'Chatbot is not available due to high demand right now. Please try again later.',
 
+        // The collapsed "how was this worked out" note under an answer
+        derivationLabel: 'How I got this',
+
         // Streaming
         stopGenerating: 'Stop generating',
         stoppedLabel: 'Stopped — this answer is incomplete.',
