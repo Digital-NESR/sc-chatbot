@@ -4,6 +4,12 @@ import https from 'https';
 import http from 'http';
 import { authOptions } from '@/lib/authOptions';
 import { logAppError } from '@/lib/logError';
+import {
+    encodeEvent,
+    textFromBufferedBody,
+    textFromN8nLine,
+    NDJSON_CONTENT_TYPE,
+} from '@/lib/chatStream';
 
 // Custom HTTPS agent that skips certificate verification.
 // Required for internal n8n servers with self-signed certificates.
@@ -21,6 +27,16 @@ export const maxDuration = 300;
 // return a real error instead.
 const UPSTREAM_TIMEOUT_MS = 280_000;
 
+// How often to send a keep-alive line while the agent has produced nothing.
+// The orchestrator is silent for its first half-minute or more while it asks
+// specialists, and an idle connection is something intermediaries are entitled
+// to reap.
+const HEARTBEAT_MS = 15_000;
+
+// Only used when the upstream turns out not to have streamed at all, to
+// recover the answer from the whole body. A streaming reply never accumulates.
+const MAX_BUFFERED_FALLBACK = 2_000_000;
+
 /** Thrown on our own deadline, so the handler can tell it apart from a socket error. */
 class UpstreamTimeout extends Error {
     constructor() {
@@ -29,22 +45,28 @@ class UpstreamTimeout extends Error {
     }
 }
 
+interface Upstream {
+    status: number;
+    res: http.IncomingMessage;
+    /** Tears down the socket. Safe to call more than once. */
+    abort: () => void;
+}
+
 /**
- * Makes an HTTP/HTTPS POST request using Node's native modules,
- * bypassing the Next.js fetch wrapper which can't use a custom SSL agent.
- * Resolves with the status code alongside the body so the caller can tell a
- * real agent reply apart from an n8n error page.
+ * Opens the agent webhook and resolves as soon as the response HEADERS arrive,
+ * leaving the body unread for the caller to consume.
+ *
+ * This is the one structural change streaming needed: resolving on 'response'
+ * rather than on 'end'. Everything underneath - Node's http modules rather
+ * than fetch, and the certificate-skipping agent - stays as it was, because
+ * Next's fetch wrapper still cannot be given a custom SSL agent.
  *
  * `signal` is the incoming request's. When the browser goes away - tab closed,
  * navigation, a cancelled send - there is no point holding the upstream call
  * open. Propagation is best effort: not every platform tells a serverless
  * function that its client disconnected.
  */
-function makeRequest(
-    url: string,
-    body: string,
-    signal?: AbortSignal,
-): Promise<{ status: number; body: string }> {
+function openUpstream(url: string, body: string, signal?: AbortSignal): Promise<Upstream> {
     return new Promise((resolve, reject) => {
         const parsed = new URL(url);
         const isHttps = parsed.protocol === 'https:';
@@ -57,22 +79,30 @@ function makeRequest(
             headers: {
                 'Content-Type': 'application/json',
                 'Content-Length': Buffer.byteLength(body),
+                // Asks nginx not to buffer this response. Harmless where it is
+                // ignored, and it covers a proxy we have not configured by
+                // hand. It is not sufficient on its own - the n8n host needed
+                // proxy_buffering off for the webhook path before anything
+                // arrived progressively - but it costs nothing to send.
+                'X-Accel-Buffering': 'no',
             },
             agent: isHttps ? insecureAgent : undefined,
         };
 
         const req = (isHttps ? https : http).request(options, (res) => {
-            let data = '';
-            res.on('data', (chunk) => (data += chunk));
-            res.on('end', () => {
-                cleanup();
-                resolve({ status: res.statusCode ?? 0, body: data });
+            cleanup();
+            resolve({
+                status: res.statusCode ?? 0,
+                res,
+                abort: () => req.destroy(),
             });
         });
 
         // Covers a socket that connects and then goes quiet, which is the shape
-        // a stalled workflow takes. The agent needs destroying explicitly:
-        // 'timeout' only fires the event, it does not end the request.
+        // a stalled workflow takes. Node resets this on every byte received, so
+        // on a streaming response it guards silence rather than duration. The
+        // agent needs destroying explicitly: 'timeout' only fires the event, it
+        // does not end the request.
         req.setTimeout(UPSTREAM_TIMEOUT_MS, () => {
             req.destroy(new UpstreamTimeout());
         });
@@ -90,6 +120,134 @@ function makeRequest(
     });
 }
 
+/**
+ * The whole reply as a string. The buffered path, unchanged in behaviour from
+ * before streaming existed, and still what the four specialist agents use.
+ */
+async function makeRequest(
+    url: string,
+    body: string,
+    signal?: AbortSignal,
+): Promise<{ status: number; body: string }> {
+    const { status, res } = await openUpstream(url, body, signal);
+    const text = await new Promise<string>((resolve, reject) => {
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => resolve(data));
+        res.on('error', reject);
+    });
+    return { status, body: text };
+}
+
+/**
+ * Turns the upstream response into our NDJSON event stream.
+ *
+ * Handles both shapes of upstream on one path, which is the point of the wire
+ * format: a converted workflow sends n8n stream chunks and every `item`
+ * becomes a delta, while a workflow still using a Respond to Webhook node
+ * sends one JSON body, produces no items, and is recovered whole at the end as
+ * a single delta. Nothing about the client changes between the two.
+ */
+function toEventStream(
+    upstream: Upstream,
+    onFailure: (message: string, detail?: string) => void,
+): ReadableStream<Uint8Array> {
+    const { res } = upstream;
+    const encoder = new TextEncoder();
+
+    let lineBuffer = '';
+    let sawItem = false;
+    /** Kept only until the first delta proves the upstream is streaming. */
+    let rawBody = '';
+    let heartbeat: ReturnType<typeof setInterval> | null = null;
+    let closed = false;
+
+    return new ReadableStream<Uint8Array>({
+        start(controller) {
+            const send = (text: string) => {
+                if (closed) return;
+                controller.enqueue(encoder.encode(text));
+            };
+
+            const finish = () => {
+                if (closed) return;
+                closed = true;
+                if (heartbeat) clearInterval(heartbeat);
+                controller.close();
+            };
+
+            heartbeat = setInterval(() => send(encodeEvent({ t: 'ping' })), HEARTBEAT_MS);
+
+            const consumeLine = (line: string) => {
+                const trimmed = line.trim();
+                if (!trimmed) return;
+                const text = textFromN8nLine(trimmed);
+                if (text === null) return;
+                sawItem = true;
+                // The answer is arriving in pieces; the accumulated copy is
+                // dead weight from here on.
+                rawBody = '';
+                if (text) send(encodeEvent({ t: 'delta', v: text }));
+            };
+
+            res.on('data', (chunk: Buffer) => {
+                const text = chunk.toString('utf8');
+                if (!sawItem && rawBody.length < MAX_BUFFERED_FALLBACK) rawBody += text;
+
+                lineBuffer += text;
+                let newline: number;
+                while ((newline = lineBuffer.indexOf('\n')) !== -1) {
+                    const line = lineBuffer.slice(0, newline);
+                    lineBuffer = lineBuffer.slice(newline + 1);
+                    consumeLine(line);
+                }
+
+                // Stop reading from n8n while the browser is behind, rather
+                // than growing an unbounded queue in memory for a slow client.
+                if (controller.desiredSize !== null && controller.desiredSize <= 0) res.pause();
+            });
+
+            res.on('end', () => {
+                consumeLine(lineBuffer);
+                lineBuffer = '';
+
+                if (!sawItem) {
+                    // Never streamed. Recover the answer the old way so a
+                    // workflow that has not been converted still works.
+                    const text = textFromBufferedBody(rawBody);
+                    if (text) send(encodeEvent({ t: 'delta', v: text }));
+                }
+
+                send(encodeEvent({ t: 'done' }));
+                finish();
+            });
+
+            res.on('error', (err: Error) => {
+                // Once bytes are on the wire the status is already 200 and
+                // cannot be taken back, so a mid-stream failure is reported
+                // inside the stream. The client appends it under whatever text
+                // it has rather than blanking the answer.
+                const message =
+                    err.name === 'UpstreamTimeout' ? err.message : 'Connection to the agent was lost';
+                onFailure(message, err.stack);
+                send(encodeEvent({ t: 'error', message }));
+                finish();
+            });
+        },
+
+        pull() {
+            res.resume();
+        },
+
+        cancel() {
+            // The browser hung up. Nothing is waiting for the rest of this.
+            closed = true;
+            if (heartbeat) clearInterval(heartbeat);
+            upstream.abort();
+        },
+    });
+}
+
 export async function POST(request: Request) {
     // Only ever used to label a failure, so a missing session is not a
     // problem worth failing the request over.
@@ -100,7 +258,7 @@ export async function POST(request: Request) {
 
     try {
         const body = await request.json();
-        const { webhookUrl, message, agent, sessionId } = body;
+        const { webhookUrl, message, agent, sessionId, stream } = body;
 
         agentName = agent ?? null;
         conversationId = sessionId ?? null;
@@ -134,6 +292,66 @@ export async function POST(request: Request) {
         }
 
         const requestBody = JSON.stringify({ message, agent, sessionId });
+
+        /* ── Streaming path ───────────────────────────────────────────────
+           Chosen by the client per agent. The buffered path below is left
+           exactly as it was, so turning the flag off in site.ts puts an agent
+           back on proven code without touching anything here. */
+        if (stream === true) {
+            const upstream = await openUpstream(webhookUrl, requestBody, request.signal);
+
+            // The status is still ours to choose until a byte of body goes
+            // out, so an upstream failure is reported the same way as on the
+            // buffered path - as a 502 the client already knows how to show.
+            if (upstream.status < 200 || upstream.status >= 300) {
+                const detail = await new Promise<string>((resolve) => {
+                    let data = '';
+                    upstream.res.on('data', (chunk) => {
+                        if (data.length < 8192) data += chunk;
+                    });
+                    upstream.res.on('end', () => resolve(data));
+                    upstream.res.on('error', () => resolve(data));
+                });
+                console.error(
+                    `[/api/chat] Agent "${agent}" webhook returned ${upstream.status}:`,
+                    detail.slice(0, 500)
+                );
+                await logAppError({
+                    stage: 'upstream',
+                    status: upstream.status,
+                    message: `Agent webhook returned ${upstream.status}`,
+                    detail,
+                    userEmail, sessionId, botId: agent, question,
+                });
+                return NextResponse.json(
+                    { error: 'Agent request failed', status: upstream.status },
+                    { status: 502 }
+                );
+            }
+
+            const body = toEventStream(upstream, (message, detail) => {
+                void logAppError({
+                    stage: 'network',
+                    status: 200,
+                    message,
+                    detail,
+                    userEmail, sessionId, botId: agent, question,
+                });
+            });
+
+            return new Response(body, {
+                status: 200,
+                headers: {
+                    'Content-Type': NDJSON_CONTENT_TYPE,
+                    'Cache-Control': 'no-cache, no-transform',
+                    // For any proxy in front of US, the same way we ask n8n's.
+                    'X-Accel-Buffering': 'no',
+                    Connection: 'keep-alive',
+                },
+            });
+        }
+
+        /* ── Buffered path (unchanged) ───────────────────────────────────── */
         const { status, body: responseText } = await makeRequest(
             webhookUrl,
             requestBody,

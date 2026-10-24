@@ -14,6 +14,19 @@ export interface AgentConfig {
     tagline: string;
     disclaimer: string;
     webhookUrl: string;
+    /**
+     * Read this agent's reply as it is written rather than all at once.
+     *
+     * Off unless stated, and deliberately per agent: the orchestrator is the
+     * only workflow nothing else consumes, so it is the only one that can be
+     * converted without breaking a caller. The four specialists are called BY
+     * the orchestrator as plain JSON over their own webhooks, and removing
+     * their Respond to Webhook node would break that read.
+     *
+     * Turning this off puts an agent back on the buffered code path, which is
+     * the same code it used before streaming existed. That is the rollback.
+     */
+    streaming?: boolean;
 }
 
 export const siteConfig = {
@@ -101,6 +114,13 @@ export const siteConfig = {
             'Detailed error: Unable to connect to the agent. Please try again later.',
         genericError:
             'Chatbot is not available due to high demand right now. Please try again later.',
+
+        // Streaming
+        stopGenerating: 'Stop generating',
+        stoppedLabel: 'Stopped — this answer is incomplete.',
+        // Shown under whatever text arrived before a mid-stream failure. The
+        // partial answer stays; this says not to trust it as a whole one.
+        streamInterrupted: 'The connection dropped before this answer finished.',
 
         // Login page
         login: {
@@ -555,6 +575,7 @@ export const siteConfig = {
             tagline: 'Ask anything. I will work out which specialists it needs and bring back one answer.',
             disclaimer: 'Every fact comes from a specialist. Questions spanning several take longer',
             webhookUrl: process.env.NEXT_PUBLIC_ORCHESTRATOR_WEBHOOK || '',
+            streaming: true,
         },
         {
             id: 'material',

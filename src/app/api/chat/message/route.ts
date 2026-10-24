@@ -18,7 +18,7 @@ export async function POST(request: Request) {
 
     try {
         const body = await request.json();
-        const { sessionId, botId, role, content } = body;
+        const { sessionId, botId, role, content, incomplete } = body;
 
         if (!botId || !role || !content) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -58,6 +58,11 @@ export async function POST(request: Request) {
                 sessionId: currentSessionId,
                 role: role,
                 content: content,
+                // Only ever 'stopped' or 'interrupted'; anything else is not
+                // a state this app produces and is not worth storing.
+                incomplete: incomplete === 'stopped' || incomplete === 'interrupted'
+                    ? incomplete
+                    : null,
             },
         });
 

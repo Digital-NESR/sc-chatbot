@@ -1,19 +1,22 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, memo } from 'react';
 import Image from 'next/image';
-import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2, HelpCircle, PlayCircle, Lightbulb } from 'lucide-react';
+import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2, HelpCircle, PlayCircle, Lightbulb, Square } from 'lucide-react';
 import CapabilitiesPanel from '@/components/CapabilitiesPanel';
 import HelpPanel from '@/components/HelpPanel';
 import ChartBlock from '@/components/ChartBlock';
 import BetaBadge from '@/components/BetaBadge';
+import StreamingMarkdown from '@/components/StreamingMarkdown';
+import { markdownComponents } from '@/components/markdownComponents';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import ReactMarkdown, { type Components } from 'react-markdown';
+import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { siteConfig, type AgentId } from '@/config/site';
 import { parseMarkdownTables, splitByTables } from '@/lib/markdownTable';
 import { exportTablesToXlsx, safeFileName } from '@/lib/exportTables';
+import { readChatStream } from '@/lib/chatStream';
 
 const { agents, suggestions, thinkingWords, colors, images, text, help } = siteConfig;
 
@@ -32,6 +35,10 @@ interface Message {
   // and an unsaved message cannot carry a rating, so it stays optional.
   dbId?: string;
   feedback?: 'up' | 'down' | null;
+  // Set when the user pressed stop, or when the connection dropped partway.
+  // Either way the text below is real but incomplete, and saying so is the
+  // whole point - a truncated answer that looks finished is a wrong answer.
+  incomplete?: 'stopped' | 'interrupted';
 }
 
 interface ChatSessionMeta {
@@ -132,75 +139,20 @@ function reportFailure(input: {
   }
 }
 
-/* Markdown renderers, shared by every segment of an answer. Module scope
-   on purpose: a fresh object here would remount the tree each render. */
-const markdownComponents: Components = {
-          p: ({ children }) => (
-            <p className="mb-1.5 last:mb-0 whitespace-pre-wrap">{children}</p>
-          ),
-          table: ({ children }) => (
-            <div className="w-full overflow-x-auto my-3 rounded-lg border border-slate-300">
-              <table className="w-full text-[13px] text-left border-collapse">
-                {children}
-              </table>
-            </div>
-          ),
-          thead: ({ children }) => (
-            <thead className="text-xs uppercase text-slate-500 bg-slate-100">
-              {children}
-            </thead>
-          ),
-          th: ({ children }) => (
-            <th className="px-3 py-1.5 font-semibold whitespace-nowrap border-b border-slate-300">{children}</th>
-          ),
-          td: ({ children }) => (
-            <td className="px-3 py-2 border-b border-slate-200 last:border-0 align-top break-words">{children}</td>
-          ),
-          ul: ({ children }) => (
-            <ul className="list-disc list-inside mb-1.5 space-y-0.5 pl-1">{children}</ul>
-          ),
-          ol: ({ children }) => (
-            <ol className="list-decimal list-inside mb-1.5 space-y-0.5 pl-1">{children}</ol>
-          ),
-          li: ({ children }) => (
-            <li>{children}</li>
-          ),
-          strong: ({ children }) => (
-            <strong className="font-semibold">{children}</strong>
-          ),
-          code: ({ children }) => (
-            <code className="bg-slate-200 text-slate-800 rounded px-1 py-0.5 font-mono text-xs">{children}</code>
-          ),
-          pre: ({ children }) => (
-            <pre className="bg-slate-800 text-slate-100 rounded-lg p-3 my-2 overflow-x-auto text-xs font-mono border border-slate-700">{children}</pre>
-          ),
-          h1: ({ children }) => <h1 className="text-base font-bold mb-1.5 mt-2 text-black">{children}</h1>,
-          h2: ({ children }) => <h2 className="text-sm font-bold mb-1.5 mt-2 text-black">{children}</h2>,
-          h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 mt-1.5 text-slate-800">{children}</h3>,
-          a: ({ href, children }) => (
-            <a
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:text-blue-800 underline break-words"
-            >
-              {children}
-            </a>
-          ),
-};
-
 /* ── Assistant Bubble (own component so each message has independent state) ── */
-function AssistantBubble({
+const AssistantBubble = memo(function AssistantBubble({
   content,
   agentName,
   messageId,
   initialFeedback = null,
+  incomplete,
 }: {
   content: string;
   agentName: string;
   /** The row id. Absent until the message has been saved. */
   messageId?: string;
   initialFeedback?: 'up' | 'down' | null;
+  incomplete?: 'stopped' | 'interrupted';
 }) {
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(initialFeedback);
@@ -346,9 +298,19 @@ function AssistantBubble({
         </button>
       </div>
 
+      {/* An answer that did not finish says so, on the answer itself. Anyone
+          reading it later - including us, in the feedback view - needs to know
+          the text stops early for a reason that is not the agent's. */}
+      {incomplete && (
+        <p className="mt-1 flex items-center gap-1.5 text-[11px] text-amber-700">
+          <Square size={9} className="fill-current shrink-0" />
+          {incomplete === 'stopped' ? text.stoppedLabel : text.streamInterrupted}
+        </p>
+      )}
+
     </div>
   );
-}
+});
 
 export default function Home() {
   const { data: session, status } = useSession();
@@ -368,6 +330,12 @@ export default function Home() {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  // The answer being written right now, held outside `messages` on purpose.
+  // It changes ten times a second; the message list does not need to be
+  // rebuilt at that rate, and keeping it separate means every settled bubble
+  // stays untouched while this one grows.
+  const [streaming, setStreaming] = useState<{ id: number; content: string } | null>(null);
+
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ChatSessionMeta[]>([]);
 
@@ -376,14 +344,28 @@ export default function Home() {
 
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   // Holds the in-flight agent request so it can be dropped when the user moves
   // on. Without this an answer can arrive after the view has been cleared and
   // render into whatever conversation is open now.
   const abortRef = useRef<AbortController | null>(null);
 
+  // Tells a deliberate stop apart from the aborts that happen when someone
+  // switches agent or opens another conversation. A stop keeps what arrived;
+  // the others throw it away, because it belongs to the view just left.
+  const stoppedByUserRef = useRef(false);
+
   const abortInFlight = () => {
+    stoppedByUserRef.current = false;
     abortRef.current?.abort();
     abortRef.current = null;
+    setStreaming(null);
+  };
+
+  const handleStopGenerating = () => {
+    if (!abortRef.current) return;
+    stoppedByUserRef.current = true;
+    abortRef.current.abort();
   };
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -441,13 +423,43 @@ export default function Home() {
     );
   };
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  /**
+   * Following the answer down, without fighting anyone who scrolls up.
+   *
+   * The old version scrolled smoothly on every change to `messages`. At ten
+   * commits a second that is a smooth scroll starting before the last one has
+   * finished, and scrolling back to read something becomes impossible - the
+   * view drags you to the bottom again every hundred milliseconds.
+   *
+   * So: remember whether the user was at the bottom BEFORE the content grew,
+   * and only follow if they were. Checking after the fact gets it wrong, since
+   * a chunk that adds two hundred pixels leaves even a pinned reader
+   * measurably far from the bottom.
+   */
+  const stickToBottomRef = useRef(true);
+
+  const isNearBottom = () => {
+    const el = scrollAreaRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
+
+  const scrollToBottom = (smooth: boolean) => {
+    messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
   };
 
   useEffect(() => {
-    scrollToBottom();
+    // A message the user just sent always scrolls into view - they are looking
+    // for it. Anything else respects where they have put the viewport.
+    const last = messages[messages.length - 1];
+    if (last?.role === 'user' || stickToBottomRef.current) scrollToBottom(true);
   }, [messages, isLoading]);
+
+  // Instant, not smooth: a smooth scroll per chunk never finishes before the
+  // next one starts, which reads as a permanently drifting page.
+  useEffect(() => {
+    if (streaming && stickToBottomRef.current) scrollToBottom(false);
+  }, [streaming]);
 
   // Auth guard — redirect to login if session is not valid
   useEffect(() => {
@@ -482,6 +494,7 @@ export default function Home() {
                  role: m.role as 'user' | 'assistant' | 'system',
                  content: m.content,
                  feedback: m.feedback ?? null,
+                 incomplete: m.incomplete ?? undefined,
              })));
              setActiveSessionId(sessionId);
              setActiveAgentId(botId as AgentId);
@@ -554,6 +567,7 @@ export default function Home() {
 
     const controller = new AbortController();
     abortRef.current = controller;
+    stoppedByUserRef.current = false;
 
     try {
       // 1. Save user message to database
@@ -598,6 +612,11 @@ export default function Home() {
         throw new ReportedError('Could not start or load the conversation');
       }
 
+      // Per agent, from config. Only the orchestrator is converted; the rest
+      // take the buffered path below, which is the code that was here before
+      // streaming existed.
+      const wantsStream = activeAgent.streaming === true;
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -608,6 +627,7 @@ export default function Home() {
           message: messageText,
           agent: activeAgent.name,
           sessionId: currentSessionId,
+          stream: wantsStream,
         }),
         signal: controller.signal,
       });
@@ -638,16 +658,78 @@ export default function Home() {
         return;
       }
 
-      const data = await response.json();
       let aiContent = '';
+      // Set when the text below stops short of a finished answer.
+      let incomplete: 'stopped' | 'interrupted' | undefined;
 
-      if (typeof data === 'object' && data !== null) {
-        if (data.output) aiContent = String(data.output);
-        else if (data.message) aiContent = String(data.message);
-        else if (data.text) aiContent = String(data.text);
-        else aiContent = JSON.stringify(data);
+      if (wantsStream && response.body) {
+        const streamId = Date.now() + 1;
+        setStreaming({ id: streamId, content: '' });
+
+        /* Commits are throttled to about ten a second.
+           Every delta is a React render and a Markdown reparse of the tail
+           block, and a fast model emits far more than ten tokens a second.
+           Committing per token makes the tab stutter without making the text
+           appear any sooner than the eye can follow. */
+        let lastCommit = 0;
+        const commit = (force: boolean) => {
+          const now = Date.now();
+          if (!force && now - lastCommit < 100) return;
+          lastCommit = now;
+          const snapshot = aiContent;
+          setStreaming(s => (s && s.id === streamId ? { id: s.id, content: snapshot } : s));
+        };
+
+        try {
+          for await (const event of readChatStream(response.body)) {
+            if (event.t === 'delta') {
+              aiContent += event.v;
+              commit(false);
+            } else if (event.t === 'error') {
+              // Bytes are already on the wire, so this cannot come back as a
+              // status. Keep what arrived and mark it.
+              incomplete = 'interrupted';
+              reportFailure({
+                stage: 'network',
+                message: event.message,
+                detail: `Mid-stream failure after ${aiContent.length} chars`,
+                sessionId: currentSessionId,
+                botId: activeAgentId,
+                question: messageText,
+              });
+              break;
+            }
+            // 'ping' does its work by existing; 'done' ends the loop naturally.
+          }
+        } catch (streamError) {
+          // A stop, or the connection going away. Either way the partial text
+          // is still worth keeping - at these durations someone who stops at
+          // ninety seconds has usually read something they wanted.
+          if (streamError instanceof DOMException && streamError.name === 'AbortError') {
+            if (!stoppedByUserRef.current) throw streamError;
+            incomplete = 'stopped';
+          } else {
+            throw streamError;
+          }
+        }
+
+        // Nothing at all arrived before the stop. There is no answer to keep,
+        // and an empty bubble saying "stopped" is just noise.
+        if (incomplete === 'stopped' && aiContent.trim().length < 40) {
+          setStreaming(null);
+          return;
+        }
       } else {
-        aiContent = String(data);
+        const data = await response.json();
+
+        if (typeof data === 'object' && data !== null) {
+          if (data.output) aiContent = String(data.output);
+          else if (data.message) aiContent = String(data.message);
+          else if (data.text) aiContent = String(data.text);
+          else aiContent = JSON.stringify(data);
+        } else {
+          aiContent = String(data);
+        }
       }
 
       // ── Sanity Check: intercept leaked JSON or garbage responses ──
@@ -662,7 +744,10 @@ export default function Home() {
         (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
         (trimmed.startsWith('[') && trimmed.endsWith(']'));
 
-      if (!trimmed || looksLikeRawJson || trimmed.startsWith('{"output":')) {
+      // An answer that was stopped or cut off is short for a reason we already
+      // know, and it is already labelled. Running it through the malformed
+      // check would replace real text with "the chatbot is busy".
+      if (!incomplete && (!trimmed || looksLikeRawJson || trimmed.startsWith('{"output":'))) {
         console.warn('Intercepted malformed AI response:', trimmed.slice(0, 200));
         reportFailure({
           stage: 'malformed',
@@ -680,9 +765,14 @@ export default function Home() {
         id: localId,
         role: 'assistant',
         content: aiContent,
+        incomplete,
       };
 
+      // Both in one go. React batches adjacent updates, so the finished bubble
+      // replaces the streaming one in a single paint rather than leaving a
+      // frame with neither on screen.
       setMessages(prev => [...prev, newAiMessage]);
+      setStreaming(null);
 
       // 2. Save AI message to database in the background.
       // Still fire and forget as far as the user is concerned, but the row id
@@ -696,7 +786,8 @@ export default function Home() {
             sessionId: currentSessionId,
             botId: activeAgentId,
             role: 'assistant',
-            content: aiContent
+            content: aiContent,
+            incomplete,
           })
         })
           .then(res => (res.ok ? res.json() : null))
@@ -744,7 +835,9 @@ export default function Home() {
       // abortInFlight() nulls the ref, so a superseded request fails this test.
       if (abortRef.current === controller) {
         abortRef.current = null;
+        stoppedByUserRef.current = false;
         setIsLoading(false);
+        setStreaming(null);
       }
     }
   };
@@ -973,7 +1066,14 @@ export default function Home() {
 
         {/* Message Container / Welcome View */}
         {/* Added extra padding bottom to ensure last messages are visible above the floating input */}
-        <div className="flex-1 overflow-y-auto px-4 sm:px-8 pb-32 md:pb-40 scroll-smooth">
+        {/* scroll-smooth is gone from here on purpose: as a CSS property it
+            overrides scrollIntoView's `auto`, so every streaming chunk would
+            animate no matter what the JS asked for. */}
+        <div
+          ref={scrollAreaRef}
+          onScroll={() => { stickToBottomRef.current = isNearBottom(); }}
+          className="flex-1 overflow-y-auto px-4 sm:px-8 pb-32 md:pb-40"
+        >
 
           {messages.length === 0 ? (
             /* Welcome View (Gemini Style) */
@@ -1072,14 +1172,41 @@ export default function Home() {
                         agentName={activeAgentName}
                         messageId={msg.dbId}
                         initialFeedback={msg.feedback ?? null}
+                        incomplete={msg.incomplete}
                       />
                     )}
                   </div>
                 </div>
               ))}
 
-              {/* Loading Indicator */}
-              {isLoading && (
+              {/* The answer as it is written. No action bar and no table views
+                  yet - those need the whole answer to be right about, and a
+                  chart of half a table would be wrong rather than early. */}
+              {streaming && streaming.content && (
+                <div className="flex w-full justify-start">
+                  <div className="flex flex-col gap-0.5 max-w-[92%] lg:max-w-full">
+                    <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-1 text-left">
+                      {activeAgentName}
+                    </span>
+                    <div
+                      className="relative px-4 py-3 text-[13.5px] leading-[1.6] rounded-xl rounded-tl-md"
+                      style={{
+                        backgroundColor: colors.assistantBubbleBg,
+                        border: `1px solid ${colors.assistantBubbleBorder}`,
+                        color: colors.assistantTextColor,
+                      }}
+                    >
+                      <StreamingMarkdown content={streaming.content} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Loading Indicator. Stands down the moment real text appears,
+                  but stays up through the orchestrator's long silent stretch
+                  while it is asking specialists - which is most of a slow
+                  answer, and exactly when it is needed. */}
+              {isLoading && !streaming?.content && (
                 <div className="flex w-full justify-start mt-2 px-1">
                   <ThinkingIndicator agentId={activeAgentId} />
                 </div>
@@ -1115,17 +1242,33 @@ export default function Home() {
                 rows={1}
               />
 
-              {/* Send Button */}
-              <button
-                onClick={handleSendMessage}
-                disabled={!inputValue.trim() || isLoading}
-                className={`absolute right-3 bottom-3 h-9 w-9 rounded-lg flex items-center justify-center text-white transition-all duration-200 ${inputValue.trim() && !isLoading
-                  ? 'bg-nesr-green hover:bg-nesr-green/80 shadow-sm hover:scale-105 active:scale-95'
-                  : 'bg-gray-100 text-gray-300 cursor-not-allowed'
-                  }`}
-              >
-                <ArrowUp size={18} strokeWidth={3} />
-              </button>
+              {/* Send, or stop while an answer is on its way.
+                  One button in one place: a separate stop control somewhere
+                  else means hunting for it, and the send button is useless
+                  during a request anyway. */}
+              {isLoading ? (
+                <button
+                  onClick={handleStopGenerating}
+                  aria-label={text.stopGenerating}
+                  title={text.stopGenerating}
+                  className="absolute right-3 bottom-3 h-9 w-9 rounded-lg flex items-center justify-center
+                             bg-slate-700 text-white shadow-sm hover:bg-slate-800 transition-all duration-200
+                             hover:scale-105 active:scale-95"
+                >
+                  <Square size={13} strokeWidth={3} className="fill-current" />
+                </button>
+              ) : (
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!inputValue.trim()}
+                  className={`absolute right-3 bottom-3 h-9 w-9 rounded-lg flex items-center justify-center text-white transition-all duration-200 ${inputValue.trim()
+                    ? 'bg-nesr-green hover:bg-nesr-green/80 shadow-sm hover:scale-105 active:scale-95'
+                    : 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                    }`}
+                >
+                  <ArrowUp size={18} strokeWidth={3} />
+                </button>
+              )}
             </div>
 
             <p className="text-center text-[10px] text-gray-400 mt-3 font-medium tracking-wide">

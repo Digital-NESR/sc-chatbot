@@ -54,6 +54,13 @@ model Message {
   reviewStatus String?
   reviewedAt   DateTime?
 
+  // Why this answer stops where it does: 'stopped' when the user pressed stop,
+  // 'interrupted' when the connection dropped partway, null when it finished.
+  // Stored rather than kept in page state so a reloaded conversation still
+  // says so - a truncated answer that looks whole is a wrong answer, and it is
+  // also the difference between a real thumbs-down and a cut-off one.
+  incomplete String?
+
   session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
