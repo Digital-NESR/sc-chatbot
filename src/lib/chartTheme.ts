@@ -98,11 +98,40 @@ export function formatAxisNumber(value: number): string {
 
 /** Full precision for tooltips and labels, grouped the way the table showed it. */
 export function formatExactNumber(value: number, unit?: string | null): string {
-    const n = Number.isInteger(value)
+    if (!unit) return plain(value);
+    if (unit === '%') return `${plain(value)}%`;
+
+    /* A rate carries its unit on both sides of the number: '$/GAL' has to come
+       out as '$0.53 / GAL', not '$/GAL 0.53'. Splitting on the slash puts the
+       currency back in front where it belongs and leaves the denominator
+       where a reader expects it. */
+    const slash = unit.indexOf('/');
+    if (slash !== -1) {
+        const per = unit.slice(slash + 1);
+        const of = unit.slice(0, slash);
+        // Money is the common case for a rate, and a price reads wrong without
+        // its minor units: 0.6 is a number, $0.60 is a price.
+        const n = of ? money(value) : plain(value);
+        return of ? `${join(of, n)} / ${per}` : `${n} / ${per}`;
+    }
+
+    return join(unit, plain(value));
+}
+
+/** A currency symbol sits against its number; a three-letter code takes a space. */
+const SYMBOL = /^[$€£﷼]$/;
+function join(unit: string, n: string): string {
+    return SYMBOL.test(unit) ? `${unit}${n}` : `${unit} ${n}`;
+}
+
+function plain(value: number): string {
+    return Number.isInteger(value)
         ? value.toLocaleString('en-US')
         : value.toLocaleString('en-US', { maximumFractionDigits: 2 });
-    if (!unit) return n;
-    return unit === '%' ? `${n}%` : `${unit} ${n}`;
+}
+
+function money(value: number): string {
+    return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 /** Long supplier and material names need truncating before they overlap. */

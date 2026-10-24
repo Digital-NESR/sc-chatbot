@@ -92,9 +92,16 @@ export default function ChartBlock({
     // chart divides one total between a few named parts; a map needs
     // countries; a comparison needs few enough rows to sit side by side.
     const available = (v: View) => {
+        if (v === 'table' || v === 'compare') {
+            // Compare reads whatever the columns hold, text included, so it is
+            // the one view that does not need a number.
+            return v === 'table' || a.comparable;
+        }
+        // Everything else plots a value, so without one there is nothing to
+        // draw and the option would open an empty chart.
+        if (!a.measures.length) return false;
         if (v === 'pie') return effectiveActive.length === 1 && a.data.length <= 8;
         if (v === 'map') return a.mappable;
-        if (v === 'compare') return a.comparable;
         return true;
     };
 

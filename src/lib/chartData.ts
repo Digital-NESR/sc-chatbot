@@ -290,7 +290,6 @@ export function analyzeTable(table: MarkdownTable): TableAnalysis {
 
     const cols = table.headers.map((_, i) => classifyColumn(table.headers, rows, i));
     const found = cols.filter((c): c is Extract<Column, { kind: 'measure' }> => c.kind === 'measure');
-    if (!found.length) return { chartable: false, reason: 'no numeric column to plot' };
 
     // Lead with the column the table is sorted by. The agents order a result
     // by whatever was asked about, so a monotonic measure is the question
@@ -334,6 +333,36 @@ export function analyzeTable(table: MarkdownTable): TableAnalysis {
         return { chartable: false, reason: `${Math.round(dupRatio * 100)}% of labels repeat` };
     }
 
+    /* No numeric column at all.
+       That is a real refusal for a chart - there is nothing to plot - but not
+       for the side-by-side cards, which compare whatever the columns hold,
+       text included. A three-column answer about three suppliers is exactly
+       what that view is for, and refusing the whole table because the prices
+       came back in two different units left it with no switcher at all.
+
+       Three columns minimum: a two-column table is a list, and a list does
+       not need cards. */
+    if (!found.length) {
+        if (table.headers.length < 3 || rows.length > 12) {
+            return { chartable: false, reason: 'no numeric column to plot' };
+        }
+        const bare = rows.map(r => ({ label: (r[labelIndex] ?? '').trim() || '(blank)' }));
+        return {
+            chartable: true,
+            data: bare,
+            mapData: bare,
+            labelHeader: table.headers[labelIndex] ?? 'Label',
+            measures: [],
+            coplot: [],
+            mappable: false,
+            comparable: true,
+            suggested: 'compare',
+            rowCount: rows.length,
+            droppedTotals,
+            truncatedFrom: null,
+        };
+    }
+
     const primary = measures[0];
     const primaryValues = rows
         .map(r => parseNumericCell(r[primary.index]))
@@ -346,9 +375,13 @@ export function analyzeTable(table: MarkdownTable): TableAnalysis {
     const temporal = labels.every(l => TEMPORAL.test(l));
     const mappable = looksLikeCountryColumn(table.headers[labelIndex] ?? '', labels);
 
-    // Side by side, a card each. Beyond about eight they stop being readable
-    // at chat width and the table was already the better way to read them.
-    const comparable = !temporal && rows.length >= 2 && rows.length <= 8;
+    /* Side by side, a card each.
+       The cards wrap at four across, so nine suppliers are three rows of
+       cards and perfectly readable - the old cap of eight refused exactly the
+       kind of answer this view is for, and refused it silently. Twelve is
+       where three rows of cards becomes more scrolling than the table it
+       replaced. */
+    const comparable = !temporal && rows.length >= 2 && rows.length <= 12;
 
     // Largest first for categories, oldest first for dates.
     const ordered = rows
