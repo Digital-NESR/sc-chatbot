@@ -6,6 +6,7 @@ import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, Layou
 import CapabilitiesPanel from '@/components/CapabilitiesPanel';
 import HelpPanel from '@/components/HelpPanel';
 import ChartBlock from '@/components/ChartBlock';
+import BetaBadge from '@/components/BetaBadge';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import ReactMarkdown, { type Components } from 'react-markdown';
@@ -89,6 +90,46 @@ function ThinkingIndicator({ agentId }: { agentId: AgentId }) {
       )}
     </span>
   );
+}
+
+/**
+ * Tells the server why an answer never arrived.
+ *
+ * Every failure below shows the user the same line, which is deliberate - they
+ * do not need to know whether n8n was down or the reply was malformed. This is
+ * the other half of that: the real cause goes somewhere it can be read later,
+ * on /admin/feedback, instead of into a console nobody opens.
+ *
+ * Fire and forget, and it swallows its own errors. The caller is already
+ * handling a failure; a failure to report it must not become a second one.
+ */
+/** A failure that reportFailure has already been told about. */
+class ReportedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ReportedError';
+  }
+}
+
+function reportFailure(input: {
+  stage: 'upstream' | 'timeout' | 'network' | 'malformed' | 'session';
+  message: string;
+  status?: number;
+  detail?: string;
+  sessionId?: string | null;
+  botId?: string;
+  question?: string;
+}) {
+  try {
+    void fetch('/api/errors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    // Nothing sensible to do here.
+  }
 }
 
 /* Markdown renderers, shared by every segment of an answer. Module scope
@@ -547,7 +588,14 @@ export default function Home() {
       // never persisted either, because currentSessionId stayed falsy. Better
       // to say so than to half-work.
       if (!currentSessionId) {
-        throw new Error('Could not start or load the conversation');
+        reportFailure({
+          stage: 'session',
+          message: 'Could not start or load the conversation',
+          detail: 'Saving the user message returned no sessionId',
+          botId: activeAgentId,
+          question: messageText,
+        });
+        throw new ReportedError('Could not start or load the conversation');
       }
 
       const response = await fetch('/api/chat', {
@@ -567,6 +615,21 @@ export default function Home() {
       // If the backend returned a non-ok status, show the generic error
       if (!response.ok) {
         console.error(`Backend error: ${response.status}`);
+        // 502 and 504 are already logged server side with the upstream body,
+        // which is the part worth having. Anything else reaching here is ours,
+        // so read what the route said before throwing the body away.
+        if (response.status !== 502 && response.status !== 504) {
+          const detail = await response.text().catch(() => '');
+          reportFailure({
+            stage: 'upstream',
+            status: response.status,
+            message: `Chat proxy returned ${response.status}`,
+            detail,
+            sessionId: currentSessionId,
+            botId: activeAgentId,
+            question: messageText,
+          });
+        }
         setMessages(prev => [...prev, {
           id: Date.now() + 1,
           role: 'assistant',
@@ -601,6 +664,14 @@ export default function Home() {
 
       if (!trimmed || looksLikeRawJson || trimmed.startsWith('{"output":')) {
         console.warn('Intercepted malformed AI response:', trimmed.slice(0, 200));
+        reportFailure({
+          stage: 'malformed',
+          message: trimmed ? 'Agent returned a JSON envelope instead of an answer' : 'Agent returned an empty answer',
+          detail: trimmed,
+          sessionId: currentSessionId,
+          botId: activeAgentId,
+          question: messageText,
+        });
         aiContent = text.genericError;
       }
 
@@ -649,6 +720,15 @@ export default function Home() {
 
       // Network failure, timeout, or unexpected crash — show as a normal assistant bubble
       console.error("Failed to send message:", error);
+      // Anything that reported itself on the way up is not logged twice.
+      if (!(error instanceof ReportedError)) reportFailure({
+        stage: 'network',
+        message: error instanceof Error ? error.message : String(error),
+        detail: error instanceof Error ? error.stack : undefined,
+        sessionId: activeSessionId,
+        botId: activeAgentId,
+        question: messageText,
+      });
       setMessages(prev => [...prev, {
         id: Date.now() + 2,
         role: 'assistant',
@@ -726,7 +806,10 @@ export default function Home() {
                 className="object-cover"
               />
             </div>
-            <h1 className="text-lg font-bold text-gray-900 tracking-tight">{text.sidebarTitle}</h1>
+            <h1 className="text-lg font-bold text-gray-900 tracking-tight">
+              {text.sidebarTitle}{' '}
+              <BetaBadge className="-translate-y-0.5" />
+            </h1>
           </div>
         </div>
 
@@ -909,6 +992,7 @@ export default function Home() {
 
               <h2 className="text-2xl md:text-3xl lg:text-4xl font-semibold text-gray-900 mb-2 tracking-tight text-center w-full max-w-full break-words whitespace-normal">
                 {text.welcomeGreeting(activeAgentName)}
+                <BetaBadge className="ml-2 -translate-y-1" />
               </h2>
 
               {/* Sits with the greeting rather than the header, so it is next to

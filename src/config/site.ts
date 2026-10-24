@@ -71,6 +71,11 @@ export const siteConfig = {
         appName: 'Supply Chain AI',
         appDescription: 'Intelligent Supply Chain Assistant',
 
+        // Shown by <BetaBadge /> wherever the product names itself. The word
+        // lives here rather than in the component so it can be changed or
+        // emptied in one place when this stops being a beta.
+        betaLabel: 'Beta',
+
         // Sidebar
         sidebarTitle: 'Supply Chain AI',
         newChatButton: 'New Chat',
@@ -85,7 +90,7 @@ export const siteConfig = {
         defaultJobTitle: 'NESR Employee',
         inputPlaceholder: (agentName: string) => `Message ${agentName}...`,
         disclaimer: (agentDisclaimer: string) =>
-            `Supply Chain AI Internal Tool • ${agentDisclaimer}`,
+            `Supply Chain AI Internal Tool (Beta) • ${agentDisclaimer}`,
         welcomeGreeting: (agentName: string) => `Hello, I am ${agentName}.`,
 
         // Table export
@@ -100,15 +105,15 @@ export const siteConfig = {
         // Login page
         login: {
             title: 'Welcome to Supply Chain AI',
-            subtitle: 'Intelligent Supply Chain Assistant',
+            subtitle: 'Intelligent Supply Chain Assistant · Beta',
             ssoButton: 'Continue with SSO',
             divider: 'or',
             passwordPlaceholder: 'Enter password',
             loginButton: 'Login with Password',
             loadingText: 'Signing in…',
             errorText: 'Incorrect password. Please try again.',
-            footer: 'NESR Internal Tool • Authorized Personnel Only',
-            pageTitle: 'Sign In — Supply Chain AI',
+            footer: 'NESR Internal Tool (Beta) • Authorized Personnel Only',
+            pageTitle: 'Sign In — Supply Chain AI (Beta)',
         },
     },
 
@@ -484,8 +489,10 @@ export const siteConfig = {
         videoBlurb: 'A quick tour of what it does.',
         videoButton: 'Meet SCAI',
         firstVisit: {
-            title: 'Welcome to Supply Chain AI',
-            body: 'A quick tour before you start. You can watch it again any time.',
+            title: 'Welcome to Supply Chain AI (Beta)',
+            // The thumbs are the only signal we get, and this is the one moment
+            // every user reads something, so it is where to ask for them.
+            body: 'A quick tour before you start. You can watch it again any time. This is a beta, so if an answer looks wrong please mark it with the thumbs.',
             dismiss: 'Start using SCAI',
         },
         guide: {

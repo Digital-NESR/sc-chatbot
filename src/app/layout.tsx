@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: siteConfig.text.appName,
+  title: `${siteConfig.text.appName} (${siteConfig.text.betaLabel})`,
   description: siteConfig.text.appDescription,
   icons: {
     icon: siteConfig.images.favicon,

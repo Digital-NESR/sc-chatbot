@@ -56,3 +56,44 @@ model Message {
 
   session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
+
+/**
+ * Why an answer never arrived.
+ *
+ * The user always sees the same line - the chatbot is busy, try again - which
+ * is the right thing to show and the wrong thing to keep. Every real cause
+ * behind it used to end in a console nobody reads, so a timeout, a dead
+ * webhook and a malformed reply were indistinguishable after the fact.
+ *
+ * Separate from Message on purpose: a failure has no conversation turn to
+ * belong to, and a row here must survive the session being deleted.
+ */
+model ErrorLog {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  userEmail String?
+  sessionId String?
+  botId     String?
+
+  // Where it broke: 'upstream' (n8n answered with a failure), 'timeout',
+  // 'network' (never got a reply), 'malformed' (a reply we could not use),
+  // or 'session' (could not start or load the conversation).
+  stage   String
+  // The HTTP status, when there was one to have.
+  status  Int?
+  // The real error, in the words of whatever produced it.
+  message String  @db.Text
+  // Upstream body or stack, truncated. The part that actually says what broke.
+  detail  String? @db.Text
+  // What the user had asked, so the failure can be reproduced.
+  question String? @db.Text
+
+  // Triage, same as a rated answer.
+  reviewNote   String?   @db.Text
+  reviewStatus String?
+  reviewedAt   DateTime?
+
+  @@index([createdAt])
+  @@index([reviewStatus])
+}

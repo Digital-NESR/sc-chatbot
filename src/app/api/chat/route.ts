@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
 import https from 'https';
 import http from 'http';
+import { authOptions } from '@/lib/authOptions';
+import { logAppError } from '@/lib/logError';
 
 // Custom HTTPS agent that skips certificate verification.
 // Required for internal n8n servers with self-signed certificates.
@@ -88,9 +91,25 @@ function makeRequest(
 }
 
 export async function POST(request: Request) {
+    // Only ever used to label a failure, so a missing session is not a
+    // problem worth failing the request over.
+    let userEmail: string | null = null;
+    let agentName: string | null = null;
+    let conversationId: string | null = null;
+    let question: string | null = null;
+
     try {
         const body = await request.json();
         const { webhookUrl, message, agent, sessionId } = body;
+
+        agentName = agent ?? null;
+        conversationId = sessionId ?? null;
+        question = typeof message === 'string' ? message : null;
+        try {
+            userEmail = (await getServerSession(authOptions))?.user?.email ?? null;
+        } catch {
+            // Never let identifying the user get in the way of answering.
+        }
 
         // Log received URL so we can verify env vars are loaded correctly
         console.log('[/api/chat] webhookUrl received:', webhookUrl);
@@ -130,6 +149,16 @@ export async function POST(request: Request) {
                 `[/api/chat] Agent "${agent}" webhook returned ${status}:`,
                 responseText.slice(0, 500)
             );
+            // The body is the only thing that says WHICH failure this is - an
+            // inactive workflow, an unregistered webhook, a node that threw.
+            // It is not shown to the user, so without this it is gone.
+            await logAppError({
+                stage: 'upstream',
+                status,
+                message: `Agent webhook returned ${status}`,
+                detail: responseText,
+                userEmail, sessionId, botId: agent, question,
+            });
             return NextResponse.json(
                 { error: 'Agent request failed', status },
                 { status: 502 }
@@ -154,6 +183,12 @@ export async function POST(request: Request) {
 
         if (error instanceof UpstreamTimeout) {
             console.error('[/api/chat]', error.message);
+            await logAppError({
+                stage: 'timeout',
+                status: 504,
+                message: error.message,
+                userEmail, sessionId: conversationId, botId: agentName, question,
+            });
             return NextResponse.json(
                 { error: 'Agent timed out', detail: error.message },
                 { status: 504 }
@@ -161,6 +196,13 @@ export async function POST(request: Request) {
         }
 
         console.error('[/api/chat] Proxy Error:', error);
+        await logAppError({
+            stage: 'network',
+            status: 500,
+            message: error instanceof Error ? error.message : String(error),
+            detail: error instanceof Error ? error.stack : String(error),
+            userEmail, sessionId: conversationId, botId: agentName, question,
+        });
         return NextResponse.json(
             { error: 'Internal Server Error', detail: String(error) },
             { status: 500 }
