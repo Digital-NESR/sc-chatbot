@@ -37,22 +37,27 @@ export const siteConfig = {
         // Fallback avatar
         fallbackAvatarBg: '#307c4c',
 
-        /* Categorical series palette for charts, used by both the chat chart
-           panel and /admin. Assigned in fixed order and never cycled: slot 1 is
-           the brand green, so a single-series chart matches the rest of the
-           product, and a chart keeps its colours when a series is filtered out.
+        /* Chart series, in fixed assignment order.
 
-           Five slots is the cap, not an oversight. Beyond five, hues this far
-           apart stop being distinguishable under red-green colour blindness.
-           These five were checked pairwise for that; if you change one, check
-           the replacement rather than picking by eye. */
-        chartSeries: ['#307c4c', '#1f6feb', '#d97706', '#a21caf', '#9a3412'],
+           The NESR brand manual asks for charts in the green family, running
+           dark to light, with mid gray available. That is a single-hue ramp
+           rather than a set of unrelated hues, so the series are told apart by
+           lightness, which is also the one signal that survives every form of
+           colour blindness. Checked pairwise before being written down.
+
+           Slot 1 is the app's own green so a chart matches the buttons around
+           it. Four slots is the cap: a fifth step of one hue stops being
+           separable, and every chart carries data labels and a legend anyway.
+
+           The two lighter steps sit under 3:1 against white on their own,
+           which is exactly why the data labels are not optional. */
+        chartSeries: ['#307c4c', '#8FC4A9', '#1B4D31', '#58595B'],
 
         // Chart furniture. Recessive on purpose: the grid is a reading aid,
         // not something to look at.
         chartGrid: '#ececec',
-        chartAxis: '#d4d4d4',
-        chartLabel: '#6b7280',
+        chartAxis: '#D1D3D4',
+        chartLabel: '#58595B',
     },
 
     /* ── Images ── */
@@ -86,8 +91,6 @@ export const siteConfig = {
         // Table export
         exportTable: 'Export table to Excel',
         exportFilePrefix: 'SupplyChainAI',
-        chartTable: 'Chart this table',
-        chartPanelTitle: 'Chart',
 
         errorMessage:
             'Detailed error: Unable to connect to the agent. Please try again later.',

@@ -51,6 +51,19 @@ export const legendProps = {
     iconSize: 8,
 };
 
+/**
+ * The number printed on each mark.
+ *
+ * On by default rather than on hover. Two of the four series are light enough
+ * that their fill alone is weak against white, and a printed value means the
+ * reader never has to rely on the colour or the axis to know what a bar says.
+ */
+export const dataLabelProps = {
+    fill: colors.chartLabel,
+    fontSize: 10,
+    offset: 6,
+} as const;
+
 /** Thin marks: a 2px line and a dot big enough to hit with a mouse. */
 export const lineProps = {
     strokeWidth: 2,

@@ -2,17 +2,16 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react';
 import Image from 'next/image';
-import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, BarChart3, Loader2, HelpCircle, PlayCircle, Lightbulb } from 'lucide-react';
+import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2, HelpCircle, PlayCircle, Lightbulb } from 'lucide-react';
 import CapabilitiesPanel from '@/components/CapabilitiesPanel';
 import HelpPanel from '@/components/HelpPanel';
-import ChartPanel from '@/components/ChartPanel';
+import ChartBlock from '@/components/ChartBlock';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { siteConfig, type AgentId } from '@/config/site';
-import { parseMarkdownTables } from '@/lib/markdownTable';
-import { hasChartableTable } from '@/lib/chartData';
+import { parseMarkdownTables, splitByTables } from '@/lib/markdownTable';
 import { exportTablesToXlsx, safeFileName } from '@/lib/exportTables';
 
 const { agents, suggestions, thinkingWords, colors, images, text, help } = siteConfig;
@@ -23,9 +22,15 @@ const { agents, suggestions, thinkingWords, colors, images, text, help } = siteC
 const INTRO_SEEN_KEY = 'scai.introSeen.v1';
 
 interface Message {
-  id: number;
+  // Local only, and only ever a React key. Fresh messages get a timestamp;
+  // loaded ones get their row id, which is a cuid.
+  id: string | number;
   role: 'user' | 'assistant' | 'system';
   content: string;
+  // The row id, once the message has actually been written. Feedback needs it
+  // and an unsaved message cannot carry a rating, so it stays optional.
+  dbId?: string;
+  feedback?: 'up' | 'down' | null;
 }
 
 interface ChatSessionMeta {
@@ -86,62 +91,9 @@ function ThinkingIndicator({ agentId }: { agentId: AgentId }) {
   );
 }
 
-/* ── Assistant Bubble (own component so each message has independent state) ── */
-function AssistantBubble({ content, agentName }: { content: string; agentName: string }) {
-  const [copied, setCopied] = useState(false);
-  const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
-  const [exporting, setExporting] = useState(false);
-  const [showChart, setShowChart] = useState(false);
-
-  // Only messages that actually contain a Markdown table get an export button.
-  const tables = useMemo(() => parseMarkdownTables(content), [content]);
-
-  // Narrower than the export test: a list of material codes exports happily
-  // but charts as nonsense, so the chart button only appears when at least one
-  // table has a label column and something real to measure.
-  const chartable = useMemo(() => hasChartableTable(tables), [tables]);
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(content);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      console.error('Failed to copy text');
-    }
-  };
-
-  const handleExportTables = async () => {
-    if (exporting || tables.length === 0) return;
-    setExporting(true);
-    try {
-      const stamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '');
-      const fileName = `${safeFileName(`${text.exportFilePrefix}-${agentName}-${stamp}`)}.xlsx`;
-      await exportTablesToXlsx(tables, fileName);
-    } catch (err) {
-      console.error('Failed to export tables:', err);
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  const toggleFeedback = (type: 'up' | 'down') => {
-    setFeedback(prev => (prev === type ? null : type));
-  };
-
-  return (
-    <div
-      className="relative px-4 py-3 text-[13.5px] leading-[1.6] transition-colors duration-200 rounded-xl rounded-tl-md animate-in fade-in zoom-in-95 slide-in-from-bottom-1 duration-300"
-      style={{
-        backgroundColor: colors.assistantBubbleBg,
-        border: `1px solid ${colors.assistantBubbleBorder}`,
-        color: colors.assistantTextColor,
-      }}
-    >
-      {/* Message Content */}
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
+/* Markdown renderers, shared by every segment of an answer. Module scope
+   on purpose: a fresh object here would remount the tree each render. */
+const markdownComponents: Components = {
           p: ({ children }) => (
             <p className="mb-1.5 last:mb-0 whitespace-pre-wrap">{children}</p>
           ),
@@ -194,25 +146,107 @@ function AssistantBubble({ content, agentName }: { content: string; agentName: s
               {children}
             </a>
           ),
-        }}
-      >
-        {content}
-      </ReactMarkdown>
+};
+
+/* ── Assistant Bubble (own component so each message has independent state) ── */
+function AssistantBubble({
+  content,
+  agentName,
+  messageId,
+  initialFeedback = null,
+}: {
+  content: string;
+  agentName: string;
+  /** The row id. Absent until the message has been saved. */
+  messageId?: string;
+  initialFeedback?: 'up' | 'down' | null;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [feedback, setFeedback] = useState<'up' | 'down' | null>(initialFeedback);
+  const [exporting, setExporting] = useState(false);
+
+  // Only messages that actually contain a Markdown table get an export button.
+  const tables = useMemo(() => parseMarkdownTables(content), [content]);
+
+  // The same answer, cut into prose and tables, so each table can offer its
+  // own chart views where it stands.
+  const segments = useMemo(() => splitByTables(content), [content]);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      console.error('Failed to copy text');
+    }
+  };
+
+  const handleExportTables = async () => {
+    if (exporting || tables.length === 0) return;
+    setExporting(true);
+    try {
+      const stamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '');
+      const fileName = `${safeFileName(`${text.exportFilePrefix}-${agentName}-${stamp}`)}.xlsx`;
+      await exportTablesToXlsx(tables, fileName);
+    } catch (err) {
+      console.error('Failed to export tables:', err);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const toggleFeedback = async (type: 'up' | 'down') => {
+    const next = feedback === type ? null : type;
+    const previous = feedback;
+
+    // Optimistic: a rating is one click and the user should not wait on a
+    // round trip to see it land. If the write fails it goes back, because a
+    // thumb that looks saved and is not is worse than one that never moved.
+    setFeedback(next);
+    if (!messageId) return;
+
+    try {
+      const res = await fetch('/api/chat/feedback', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId, feedback: next }),
+      });
+      if (!res.ok) throw new Error(`Feedback failed: ${res.status}`);
+    } catch (err) {
+      console.error('Failed to save feedback:', err);
+      setFeedback(previous);
+    }
+  };
+
+  return (
+    <div
+      className="relative px-4 py-3 text-[13.5px] leading-[1.6] transition-colors duration-200 rounded-xl rounded-tl-md animate-in fade-in zoom-in-95 slide-in-from-bottom-1 duration-300"
+      style={{
+        backgroundColor: colors.assistantBubbleBg,
+        border: `1px solid ${colors.assistantBubbleBorder}`,
+        color: colors.assistantTextColor,
+      }}
+    >
+      {/* The answer, cut around its tables so each one can be read as a
+          table or as a chart in place. A message with no table is a single
+          text segment and renders exactly as it did before. */}
+      {segments.map((seg, i) =>
+        seg.kind === 'text' ? (
+          <ReactMarkdown key={i} remarkPlugins={[remarkGfm]} components={markdownComponents}>
+            {seg.markdown}
+          </ReactMarkdown>
+        ) : (
+          <ChartBlock key={i} table={seg.table}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+              {seg.markdown}
+            </ReactMarkdown>
+          </ChartBlock>
+        )
+      )}
 
       {/* ── Action Bar ── */}
       <div className="flex items-center justify-end gap-0.5 -mr-1 mt-1.5 opacity-60 hover:opacity-100 transition-opacity duration-200">
-        {/* Chart — only when the data is actually shaped for one */}
-        {chartable && (
-          <button
-            onClick={() => setShowChart(true)}
-            aria-label={text.chartTable}
-            title={text.chartTable}
-            className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors duration-150"
-          >
-            <BarChart3 size={14} />
-          </button>
-        )}
-
         {/* Export tables to Excel — only rendered when the message has one */}
         {tables.length > 0 && (
           <button
@@ -243,11 +277,14 @@ function AssistantBubble({ content, agentName }: { content: string; agentName: s
           )}
         </button>
 
-        {/* Thumbs Up */}
+        {/* Thumbs. Held back until the answer has a row to write to, which is
+            a moment after it appears. A rating taken before then would have
+            nowhere to go and would quietly disappear on the next reload. */}
         <button
           onClick={() => toggleFeedback('up')}
+          disabled={!messageId}
           aria-label="Thumbs up"
-          className={`p-1 rounded-md transition-colors duration-150 ${feedback === 'up'
+          className={`p-1 rounded-md transition-colors duration-150 disabled:opacity-40 ${feedback === 'up'
               ? 'text-emerald-500 bg-emerald-50'
               : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200/50'
             }`}
@@ -255,11 +292,11 @@ function AssistantBubble({ content, agentName }: { content: string; agentName: s
           <ThumbsUp size={14} fill={feedback === 'up' ? 'currentColor' : 'none'} />
         </button>
 
-        {/* Thumbs Down */}
         <button
           onClick={() => toggleFeedback('down')}
+          disabled={!messageId}
           aria-label="Thumbs down"
-          className={`p-1 rounded-md transition-colors duration-150 ${feedback === 'down'
+          className={`p-1 rounded-md transition-colors duration-150 disabled:opacity-40 ${feedback === 'down'
               ? 'text-red-400 bg-red-50'
               : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200/50'
             }`}
@@ -268,13 +305,6 @@ function AssistantBubble({ content, agentName }: { content: string; agentName: s
         </button>
       </div>
 
-      {showChart && (
-        <ChartPanel
-          tables={tables}
-          title={`${agentName} · ${text.chartPanelTitle}`}
-          onClose={() => setShowChart(false)}
-        />
-      )}
     </div>
   );
 }
@@ -407,8 +437,10 @@ export default function Home() {
          if (Array.isArray(data)) {
              setMessages(data.map((m: any) => ({
                  id: m.id,
+                 dbId: m.id,
                  role: m.role as 'user' | 'assistant' | 'system',
-                 content: m.content
+                 content: m.content,
+                 feedback: m.feedback ?? null,
              })));
              setActiveSessionId(sessionId);
              setActiveAgentId(botId as AgentId);
@@ -572,15 +604,19 @@ export default function Home() {
         aiContent = text.genericError;
       }
 
+      const localId = Date.now() + 1;
       const newAiMessage: Message = {
-        id: Date.now() + 1,
+        id: localId,
         role: 'assistant',
         content: aiContent,
       };
 
       setMessages(prev => [...prev, newAiMessage]);
 
-      // 2. Save AI message to database in the background
+      // 2. Save AI message to database in the background.
+      // Still fire and forget as far as the user is concerned, but the row id
+      // comes back and is attached to the message, so the thumbs have
+      // something to write to without waiting for a reload.
       if (currentSessionId) {
         fetch('/api/chat/message', {
           method: 'POST',
@@ -591,7 +627,16 @@ export default function Home() {
             role: 'assistant',
             content: aiContent
           })
-        }).catch(err => console.error('Failed to save AI message:', err));
+        })
+          .then(res => (res.ok ? res.json() : null))
+          .then(saved => {
+            const dbId = saved?.message?.id;
+            if (!dbId) return;
+            setMessages(prev =>
+              prev.map(m => (m.id === localId ? { ...m, dbId } : m))
+            );
+          })
+          .catch(err => console.error('Failed to save AI message:', err));
       }
 
     } catch (error) {
@@ -938,7 +983,12 @@ export default function Home() {
                         </ReactMarkdown>
                       </div>
                     ) : (
-                      <AssistantBubble content={msg.content} agentName={activeAgentName} />
+                      <AssistantBubble
+                        content={msg.content}
+                        agentName={activeAgentName}
+                        messageId={msg.dbId}
+                        initialFeedback={msg.feedback ?? null}
+                      />
                     )}
                   </div>
                 </div>

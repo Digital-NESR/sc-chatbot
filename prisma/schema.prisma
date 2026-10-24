@@ -40,5 +40,11 @@ model Message {
   content   String   @db.Text
   createdAt DateTime @default(now())
 
+  // Thumbs up or down on an assistant answer: 'up', 'down', or null when the
+  // user has not rated it or has taken a rating back. Nullable rather than a
+  // default so "not rated" and "rated neutral" stay different things.
+  feedback   String?
+  feedbackAt DateTime?
+
   session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }

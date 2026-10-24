@@ -10,6 +10,10 @@
 export interface MarkdownTable {
     headers: string[];
     rows: string[][];
+    /** First line of the table in the source, 0-based and inclusive. */
+    startLine: number;
+    /** Last line of the table in the source, 0-based and inclusive. */
+    endLine: number;
 }
 
 /** Split one table line into cells, honouring \| escapes and `inline code`. */
@@ -100,7 +104,7 @@ export function parseMarkdownTables(markdown: string): MarkdownTable[] {
             j++;
         }
 
-        tables.push({ headers, rows });
+        tables.push({ headers, rows, startLine: i, endLine: j - 1 });
         i = j - 1;
     }
 
@@ -109,4 +113,46 @@ export function parseMarkdownTables(markdown: string): MarkdownTable[] {
 
 export function hasMarkdownTable(markdown: string): boolean {
     return parseMarkdownTables(markdown).length > 0;
+}
+
+/**
+ * One assistant answer, cut into the prose around its tables and the tables
+ * themselves.
+ *
+ * This exists so a table can be swapped for a chart where it stands, without
+ * the Markdown renderer having to work out which of several tables it is
+ * currently drawing. That counter would have to survive re-renders it cannot
+ * see, which is exactly the kind of thing React is allowed to run twice.
+ * Splitting the source first keeps the decision in one place and pure.
+ */
+export type MessageSegment =
+    | { kind: 'text'; markdown: string }
+    | { kind: 'table'; markdown: string; table: MarkdownTable; index: number };
+
+export function splitByTables(markdown: string): MessageSegment[] {
+    const tables = parseMarkdownTables(markdown);
+    if (!tables.length) return [{ kind: 'text', markdown }];
+
+    const lines = markdown.split(/\r?\n/);
+    const segments: MessageSegment[] = [];
+    let cursor = 0;
+
+    tables.forEach((table, index) => {
+        if (table.startLine > cursor) {
+            const before = lines.slice(cursor, table.startLine).join('\n');
+            if (before.trim()) segments.push({ kind: 'text', markdown: before });
+        }
+        segments.push({
+            kind: 'table',
+            markdown: lines.slice(table.startLine, table.endLine + 1).join('\n'),
+            table,
+            index,
+        });
+        cursor = table.endLine + 1;
+    });
+
+    const after = lines.slice(cursor).join('\n');
+    if (after.trim()) segments.push({ kind: 'text', markdown: after });
+
+    return segments;
 }
