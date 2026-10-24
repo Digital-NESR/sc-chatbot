@@ -187,6 +187,16 @@ export interface ChartableTable {
     coplot: string[];
     /** True when the label column holds countries, so a map is worth offering. */
     mappable: boolean;
+    /**
+     * Every row, for the map only.
+     *
+     * `data` is capped at MAX_PLOTTED because a bar chart runs out of axis.
+     * A map does not - it has room for every country - and dropping rows there
+     * is far worse than on a bar chart, because an omitted country is drawn in
+     * the no-data grey and reads as "nothing here" rather than "not shown".
+     * Populated only when mappable, so it costs nothing otherwise.
+     */
+    mapData: Array<{ label: string } & Record<string, string | number>>;
     /** True when there are few enough rows to put side by side and compare. */
     comparable: boolean;
     suggested: ChartKind;
@@ -345,13 +355,16 @@ export function analyzeTable(table: MarkdownTable): TableAnalysis {
           ? ordered.slice(-MAX_PLOTTED)
           : ordered.slice(0, MAX_PLOTTED);
 
-    const data = plotted.map(({ r }) => {
-        const row: { label: string } & Record<string, string | number> = {
-            label: (r[labelIndex] ?? '').trim() || '(blank)',
-        };
-        for (const m of measures) row[m.header] = parseNumericCell(r[m.index])?.value ?? 0;
-        return row;
-    });
+    const toRows = (from: { r: string[]; i: number }[]) =>
+        from.map(({ r }) => {
+            const row: { label: string } & Record<string, string | number> = {
+                label: (r[labelIndex] ?? '').trim() || '(blank)',
+            };
+            for (const m of measures) row[m.header] = parseNumericCell(r[m.index])?.value ?? 0;
+            return row;
+        });
+
+    const data = toRows(plotted);
 
     const allPositive = primaryValues.every(v => v >= 0);
     const longLabels = data.some(d => d.label.length > 18);
@@ -370,9 +383,12 @@ export function analyzeTable(table: MarkdownTable): TableAnalysis {
             ? 'horizontalBar'
             : 'bar';
 
+    const mapData = mappable && truncatedFrom ? toRows(ordered) : data;
+
     return {
         chartable: true,
         data,
+        mapData,
         labelHeader: table.headers[labelIndex] ?? 'Label',
         measures: measures.map(m => ({ header: m.header, unit: m.unit })),
         coplot: sharedScale(measures, data),

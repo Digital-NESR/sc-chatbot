@@ -15,7 +15,7 @@ import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { siteConfig, agentEndpoint, type AgentId } from '@/config/site';
-import { parseMarkdownTables, splitByTables } from '@/lib/markdownTable';
+import { parseMarkdownTables, splitByTables, normalizeInlineHtml } from '@/lib/markdownTable';
 import { splitDerivation } from '@/lib/derivation';
 import { exportTablesToXlsx, safeFileName } from '@/lib/exportTables';
 import { readChatStream } from '@/lib/chatStream';
@@ -171,7 +171,11 @@ const AssistantBubble = memo(function AssistantBubble({
   // told to put at the end. Split before anything else looks at the content:
   // the note is prose about the query, so charting or exporting it would be
   // charting the method rather than the data.
-  const { body, derivation } = useMemo(() => splitDerivation(content), [content]);
+  const { body: rawBody, derivation } = useMemo(() => splitDerivation(content), [content]);
+
+  // Inline HTML out before anything parses or renders this - a <br> in a cell
+  // shows as literal text and stops the column parsing as a number.
+  const body = useMemo(() => normalizeInlineHtml(rawBody), [rawBody]);
 
   // Only messages that actually contain a Markdown table get an export button.
   const tables = useMemo(() => parseMarkdownTables(body), [body]);
@@ -273,7 +277,14 @@ const AssistantBubble = memo(function AssistantBubble({
           </button>
 
           {showDerivation && (
-            <div className="mt-1.5 rounded-lg bg-white/70 border border-slate-200 px-3 py-2 text-[12px] leading-[1.55] text-slate-600">
+            // break-words and the overflow guard matter here: this is where
+            // raw SQL, long regexes and 18-character material IDs end up, and
+            // without them one identifier pushes the whole bubble sideways.
+            <div className="mt-1.5 rounded-lg bg-white/70 border border-slate-200 px-3 py-2.5
+                            text-[12px] leading-[1.6] text-slate-600 break-words overflow-x-auto
+                            [&_p]:mb-2 [&_p:last-child]:mb-0
+                            [&_ul]:mt-0 [&_ul]:mb-0 [&_ul]:space-y-1
+                            [&_code]:bg-slate-100 [&_code]:text-slate-700 [&_code]:text-[11px]">
               <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                 {derivation}
               </ReactMarkdown>

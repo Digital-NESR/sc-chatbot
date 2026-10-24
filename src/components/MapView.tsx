@@ -36,9 +36,17 @@ type CountryFeature = { id?: string | number; properties: { name: string } } & {
 
 export default function MapView({
     analysis,
+    rows,
     measure,
 }: {
     analysis: ChartableTable;
+    /**
+     * The rows to draw, which are NOT analysis.data. A bar chart is capped at
+     * fifteen because the axis runs out; a map has room for every country, and
+     * a country left out is drawn in the no-data grey, which reads as "nothing
+     * here" rather than "not shown".
+     */
+    rows: ChartableTable['mapData'];
     /** Which measure to shade by. */
     measure: string;
 }) {
@@ -61,7 +69,7 @@ export default function MapView({
         const markers: { name: string; value: number; coords: [number, number] }[] = [];
         const unplaced: { name: string; value: number }[] = [];
 
-        for (const row of analysis.data) {
+        for (const row of rows) {
             const value = Number(row[measure]);
             if (!Number.isFinite(value)) continue;
             const atlas = toAtlasName(row.label, atlasNames);
@@ -76,7 +84,7 @@ export default function MapView({
             else unplaced.push({ name: row.label, value });
         }
         return { values, unplaced, markers };
-    }, [analysis.data, measure, atlasNames]);
+    }, [rows, measure, atlasNames]);
 
     /**
      * Quantile buckets, not a linear scale.

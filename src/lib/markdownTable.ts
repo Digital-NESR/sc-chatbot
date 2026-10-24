@@ -156,3 +156,30 @@ export function splitByTables(markdown: string): MessageSegment[] {
 
     return segments;
 }
+
+/**
+ * Takes inline HTML out of an answer before anything parses or renders it.
+ *
+ * Agents occasionally emit `<br>` inside a table cell to stack two values. It
+ * fails twice over: ReactMarkdown escapes raw HTML, so the reader sees the tag
+ * as literal text, and the cell then holds two numbers, so it stops parsing as
+ * a measure and the whole table is judged unchartable.
+ *
+ * In a table row the break becomes a semicolon, which is what the cell meant.
+ * Elsewhere it becomes a space. Neither can reintroduce a line break, because
+ * a newline inside a row would split one table row into two broken ones.
+ *
+ * This is defensive: the agents are also told not to do it. Doing both means
+ * one badly formatted answer degrades into a readable one instead of a broken
+ * one.
+ */
+export function normalizeInlineHtml(markdown: string): string {
+    if (!markdown.includes('<')) return markdown;
+    return markdown
+        .split('\n')
+        .map(line => {
+            const isRow = line.trimStart().startsWith('|');
+            return line.replace(/<br\s*\/?>/gi, isRow ? '; ' : ' ');
+        })
+        .join('\n');
+}

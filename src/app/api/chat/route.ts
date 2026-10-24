@@ -7,7 +7,7 @@ import { logAppError } from '@/lib/logError';
 import {
     encodeEvent,
     textFromBufferedBody,
-    textFromN8nLine,
+    itemFromN8nLine,
     NDJSON_CONTENT_TYPE,
 } from '@/lib/chatStream';
 
@@ -157,6 +157,17 @@ function toEventStream(
 
     let lineBuffer = '';
     let sawItem = false;
+    /**
+     * The node whose output is the answer.
+     *
+     * Every node in a streamed workflow emits items, not just the agent. The
+     * specialists keep a Respond to Webhook node so the orchestrator can read
+     * them as JSON, and that node streams one more item carrying the whole
+     * `{"output":"…"}` envelope - the complete answer over again, as raw JSON.
+     * Locking onto whichever node speaks first keeps the agent and drops the
+     * rest, without this route needing to know any node's name.
+     */
+    let answerNodeId: string | null = null;
     /** Kept only until the first delta proves the upstream is streaming. */
     let rawBody = '';
     let heartbeat: ReturnType<typeof setInterval> | null = null;
@@ -181,13 +192,19 @@ function toEventStream(
             const consumeLine = (line: string) => {
                 const trimmed = line.trim();
                 if (!trimmed) return;
-                const text = textFromN8nLine(trimmed);
-                if (text === null) return;
+                const item = itemFromN8nLine(trimmed);
+                if (item === null) return;
+
+                // First node to produce an item is the agent. Anything after
+                // it is a later node restating the answer.
+                if (answerNodeId === null) answerNodeId = item.nodeId;
+                else if (item.nodeId !== answerNodeId) return;
+
                 sawItem = true;
                 // The answer is arriving in pieces; the accumulated copy is
                 // dead weight from here on.
                 rawBody = '';
-                if (text) send(encodeEvent({ t: 'delta', v: text }));
+                if (item.text) send(encodeEvent({ t: 'delta', v: item.text }));
             };
 
             res.on('data', (chunk: Buffer) => {

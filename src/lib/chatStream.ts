@@ -112,16 +112,30 @@ export interface N8nStreamChunk {
     metadata?: Record<string, unknown>;
 }
 
+/** One line of an n8n stream that carries text, and which node produced it. */
+export interface N8nItem {
+    text: string;
+    nodeId: string;
+}
+
 /**
  * The text in one line of an n8n streaming response, or null if that line
  * carries no text.
  *
+ * **Every node streams, not only the agent.** A workflow that keeps a Respond
+ * to Webhook node - which the four specialists must, because the orchestrator
+ * reads them as JSON - emits a second `item` from that node whose content is
+ * the entire `{"output":"…"}` envelope. Treating every item as answer text
+ * appends the whole answer again as raw JSON, which is exactly what it looked
+ * like. So the node is returned alongside the text and the caller keeps only
+ * one of them.
+ *
  * Returns null for anything unrecognised too, which is what makes the "did
- * this upstream stream at all" test below work: a workflow still answering
- * with a single `{"output":"…"}` body produces no items, so the caller knows
- * to fall back to reading the whole body.
+ * this upstream stream at all" test work: a workflow still answering with a
+ * single `{"output":"…"}` body produces no items, so the caller knows to fall
+ * back to reading the whole body.
  */
-export function textFromN8nLine(line: string): string | null {
+export function itemFromN8nLine(line: string): N8nItem | null {
     let parsed: N8nStreamChunk;
     try {
         parsed = JSON.parse(line) as N8nStreamChunk;
@@ -129,7 +143,10 @@ export function textFromN8nLine(line: string): string | null {
         return null;
     }
     if (parsed?.type !== 'item') return null;
-    return typeof parsed.content === 'string' ? parsed.content : null;
+    if (typeof parsed.content !== 'string') return null;
+
+    const nodeId = parsed.metadata?.nodeId;
+    return { text: parsed.content, nodeId: typeof nodeId === 'string' ? nodeId : '' };
 }
 
 /**

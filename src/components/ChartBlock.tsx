@@ -168,7 +168,8 @@ export default function ChartBlock({
             ) : (
                 <div className="rounded-xl border border-slate-200 bg-white px-1 sm:px-2 pt-3 pb-2">
                     {drawKind === 'map' ? (
-                        <MapView analysis={a} measure={effectiveActive[0]} />
+                        // Deliberately the untruncated set: see mapData.
+                        <MapView analysis={a} rows={a.mapData} measure={effectiveActive[0]} />
                     ) : drawKind === 'compare' ? (
                         <CompareView table={table} analysis={a} />
                     ) : (
