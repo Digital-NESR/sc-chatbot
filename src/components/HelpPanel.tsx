@@ -1,15 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { X, PlayCircle, BookOpen, Check, Ban, EyeOff, AlertTriangle } from 'lucide-react';
+import { useEffect } from 'react';
+import { X, Check, Ban, EyeOff, AlertTriangle } from 'lucide-react';
 import { siteConfig } from '@/config/site';
 
 /**
- * Help panel: the intro video and the prompting guide.
+ * One panel, two views: the intro video and the prompting guide.
  *
- * Also used for the first-visit welcome, where `videoOnly` opens it straight
- * on the video with a dismiss button instead of tabs. Same component so the
- * video is defined and styled once.
+ * They are separate buttons in the header rather than tabs behind a single
+ * Help button, because they answer different questions and someone wanting
+ * one rarely wants the other. `firstVisit` is the same video view with the
+ * welcome copy and a dismiss button, so the embed is defined once.
  */
 
 type Tone = 'do' | 'dont' | 'cant' | 'check';
@@ -22,13 +23,14 @@ const TONE: Record<Tone, { icon: typeof Check; ring: string; text: string; bg: s
 };
 
 export default function HelpPanel({
+    view,
     onClose,
-    videoOnly = false,
+    firstVisit = false,
 }: {
+    view: 'video' | 'guide';
     onClose: () => void;
-    videoOnly?: boolean;
+    firstVisit?: boolean;
 }) {
-    const [tab, setTab] = useState<'video' | 'guide'>('video');
     const { help } = siteConfig;
 
     useEffect(() => {
@@ -42,30 +44,30 @@ export default function HelpPanel({
         };
     }, [onClose]);
 
+    const title = firstVisit ? help.firstVisit.title : view === 'video' ? help.videoTitle : help.guide.title;
+    const blurb = firstVisit ? help.firstVisit.body : view === 'video' ? help.videoBlurb : help.guide.intro;
+
     return (
         <div
             className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
             role="dialog"
             aria-modal="true"
-            aria-label={videoOnly ? help.firstVisit.title : 'Help'}
+            aria-label={title}
         >
             <div
                 className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
                 onClick={onClose}
             />
 
-            <div className="relative w-full sm:max-w-3xl max-h-[90vh] sm:max-h-[86vh] bg-white
+            <div className={`relative w-full ${view === 'video' ? 'sm:max-w-3xl' : 'sm:max-w-2xl'}
+                            max-h-[90vh] sm:max-h-[86vh] bg-white
                             rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col
-                            animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
+                            animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200`}>
 
                 <div className="flex items-start justify-between gap-4 px-5 sm:px-6 pt-5 pb-4 border-b border-gray-100 shrink-0">
                     <div>
-                        <h2 className="font-semibold text-gray-900">
-                            {videoOnly ? help.firstVisit.title : 'Help'}
-                        </h2>
-                        {videoOnly && (
-                            <p className="text-sm text-gray-500 mt-0.5">{help.firstVisit.body}</p>
-                        )}
+                        <h2 className="font-semibold text-gray-900">{title}</h2>
+                        <p className="text-sm text-gray-500 mt-0.5">{blurb}</p>
                     </div>
                     <button
                         onClick={onClose}
@@ -76,34 +78,15 @@ export default function HelpPanel({
                     </button>
                 </div>
 
-                {!videoOnly && (
-                    <div className="flex gap-1 px-5 sm:px-6 pt-3 border-b border-gray-100 shrink-0">
-                        {([['video', 'Intro video', PlayCircle], ['guide', 'Getting good answers', BookOpen]] as const).map(
-                            ([id, label, Icon]) => (
-                                <button
-                                    key={id}
-                                    onClick={() => setTab(id)}
-                                    className={`flex items-center gap-1.5 px-3 py-2 text-sm rounded-t-lg border-b-2 -mb-px transition-colors ${
-                                        tab === id
-                                            ? 'border-nesr-green text-nesr-green font-medium'
-                                            : 'border-transparent text-gray-500 hover:text-gray-800'
-                                    }`}
-                                >
-                                    <Icon size={15} />
-                                    {label}
-                                </button>
-                            ),
-                        )}
-                    </div>
-                )}
-
                 <div className="overflow-y-auto px-5 sm:px-6 py-5">
-                    {(videoOnly || tab === 'video') && (
+                    {view === 'video' ? (
                         <div>
-                            {/* 16:9 via aspect-ratio so it scales with the panel rather
+                            {/* 16:9 via aspect-ratio, so it scales with the panel rather
                                 than the 640x360 the embed code hardcodes. */}
-                            <div className="relative w-full rounded-xl overflow-hidden bg-gray-900 shadow-sm"
-                                 style={{ aspectRatio: '16 / 9' }}>
+                            <div
+                                className="relative w-full rounded-xl overflow-hidden bg-gray-900 shadow-sm"
+                                style={{ aspectRatio: '16 / 9' }}
+                            >
                                 <iframe
                                     src={help.videoUrl}
                                     title={help.videoTitle}
@@ -116,7 +99,7 @@ export default function HelpPanel({
                                 Hosted on NESR SharePoint. If it asks you to sign in, use your NESR account.
                             </p>
 
-                            {videoOnly && (
+                            {firstVisit && (
                                 <button
                                     onClick={onClose}
                                     className="mt-5 w-full sm:w-auto px-5 py-2.5 rounded-lg bg-nesr-green text-white
@@ -126,12 +109,8 @@ export default function HelpPanel({
                                 </button>
                             )}
                         </div>
-                    )}
-
-                    {!videoOnly && tab === 'guide' && (
+                    ) : (
                         <div className="space-y-4">
-                            <p className="text-sm text-gray-600">{help.guide.intro}</p>
-
                             {help.guide.sections.map((sec) => {
                                 const t = TONE[sec.tone as Tone] ?? TONE.check;
                                 const Icon = t.icon;

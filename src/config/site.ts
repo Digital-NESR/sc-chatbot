@@ -446,66 +446,70 @@ export const siteConfig = {
     },
 
     /* ── Help ──
-       Shown in the Help panel, and the video alone on a user's first visit.
+       Two entry points, not one: the video and the guide answer different
+       questions, and someone wanting one rarely wants the other.
 
        The guide is not generic prompting advice. Every line comes from a way
-       these specific agents have actually gone wrong or been misread during
+       these specific agents have actually gone wrong or been misread in
        testing, so it stays useful only if it is updated when that changes. */
     help: {
         // SharePoint / Stream embed. Viewers must be signed in to SharePoint,
         // which Azure AD SSO normally handles, but someone outside the tenant
-        // will see a sign-in screen rather than the video.
+        // sees a sign-in screen rather than the video.
         videoUrl:
             'https://nesrcorp.sharepoint.com/sites/digitalstudio/_layouts/15/embed.aspx?UniqueId=06892c2c-54c4-485d-86f8-6e09b5c96698&embed=%7B%22ust%22%3Afalse%2C%22hv%22%3A%22CopyEmbedCode%22%7D&referrer=StreamWebApp&referrerScenario=EmbedDialog.Create',
         videoTitle: 'Meet SCAI',
+        videoBlurb: 'A quick tour of what it does.',
+        videoButton: 'Meet SCAI',
         firstVisit: {
             title: 'Welcome to Supply Chain AI',
-            body: 'Two minutes on what it does and how to get the most from it. You can watch it again any time from Help.',
-            dismiss: 'Get started',
+            body: 'A quick tour before you start. You can watch it again any time.',
+            dismiss: 'Start using SCAI',
         },
         guide: {
-            intro:
-                'These assistants read your real SAP and Power BI data. They are good at finding things and bad at guessing, so the more specific you are, the better the answer.',
+            title: 'How to ask',
+            intro: 'It reads your real SAP data. It is good at finding things and bad at guessing, so be specific.',
+            button: 'How to ask',
             sections: [
                 {
-                    title: 'Give it the number',
+                    title: 'Be specific',
                     tone: 'do',
                     items: [
-                        '"Where is PR 1005026000" beats "where is my request". A reference number is the single biggest improvement you can make to an answer.',
-                        'Say the plant as a 4-digit code. Material AI will stop and ask otherwise, which costs you a round trip.',
-                        'For a supplier, use the name rather than a code. A brand is often several codes: DHL alone is seven, including a separate DHL Global Forwarding IRAQ.',
-                        'Ask one thing at a time. A paragraph with four questions gets you the weakest of four answers.',
+                        'Give the number. "Where is PR 1005026000" beats "where is my request" by a mile.',
+                        'Name the plant, as a 4-digit code. Material AI will stop and ask otherwise.',
+                        'Name the supplier, not a code. A brand is usually several codes: DHL alone is seven.',
+                        'Ask one thing at a time. Four questions in a paragraph gets you the weakest of four answers.',
                     ],
                 },
                 {
-                    title: 'Things that will not work',
+                    title: 'What will not work',
                     tone: 'dont',
                     items: [
-                        '"Show me my requests." Nothing links you to a requisition, because the requester is not stored as an email address. Give a number or a name.',
-                        'Treating a material number and a manufacturer part number as the same thing. They are different, and the digits sometimes coincide.',
-                        'Assuming a count from a table you can see. If it shows 50 rows, ask how many there are in total.',
-                        'Asking the wrong specialist. Material AI covers stock and the material master; Track My Request covers where a document has got to. SCAI picks for you if you are unsure.',
+                        '"Show me my requests." Nothing links you to a requisition, so give a number or a name.',
+                        'Treating a material number and a manufacturer part number as the same thing.',
+                        'Reading a count off a table. If it shows 50 rows, ask how many there are altogether.',
+                        'Asking the wrong assistant. Unsure? Ask SCAI and it picks.',
                     ],
                 },
                 {
-                    title: 'What it genuinely cannot tell you',
+                    title: 'What it cannot know',
                     tone: 'cant',
                     items: [
-                        'Where a shipment physically is. There is no AWB, container or bill of lading anywhere in the data, only how much is in transit.',
-                        'Which GRN document a receipt was posted under. The receipt, date and quantity are there; the document number is not.',
+                        'Where a shipment physically is. There is no AWB or container number anywhere, only how much is in transit.',
+                        'Which GRN document a receipt was posted under. The receipt is there; the document number is not.',
                         'Goods issues. Only receipts are loaded.',
-                        'How much of an invoice has been part-paid. The data holds paid or not paid, nothing in between.',
-                        'HS codes. They are not held in any system we load.',
+                        'How much of an invoice was part-paid. It is paid or not paid, nothing between.',
+                        'HS codes. Not held in any system we read.',
                     ],
                 },
                 {
-                    title: 'Check these before you act',
+                    title: 'Worth double-checking',
                     tone: 'check',
                     items: [
-                        'Plant extension is inferred from inventory records, not the SAP material-plant master. Confirm in SAP before raising a PR against it.',
-                        'Data refreshes on a schedule, so it can sit a few hours behind SAP. Ask when it was last loaded if the timing matters.',
-                        'A material can be flagged for deletion and still look normal. Ask for the live replacement rather than using the first code you are given.',
-                        'If an answer says there are none of something, and that surprises you, ask again a different way. A wrong filter and an empty table look identical in an answer.',
+                        'Plant extension is inferred, not read from SAP. Confirm before raising a PR against it.',
+                        'Data refreshes daily, so it can sit a few hours behind SAP. Ask when it last loaded if timing matters.',
+                        'A deleted material can look perfectly normal. Ask for the live replacement.',
+                        'If it says there are none and that surprises you, ask again another way. A wrong filter and an empty table look identical.',
                     ],
                 },
             ],

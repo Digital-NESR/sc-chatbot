@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react';
 import Image from 'next/image';
-import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2, HelpCircle, LifeBuoy } from 'lucide-react';
+import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2, HelpCircle, PlayCircle, Lightbulb } from 'lucide-react';
 import CapabilitiesPanel from '@/components/CapabilitiesPanel';
 import HelpPanel from '@/components/HelpPanel';
 import { useSession, signOut } from 'next-auth/react';
@@ -13,7 +13,7 @@ import { siteConfig, type AgentId } from '@/config/site';
 import { parseMarkdownTables } from '@/lib/markdownTable';
 import { exportTablesToXlsx, safeFileName } from '@/lib/exportTables';
 
-const { agents, suggestions, thinkingWords, colors, images, text } = siteConfig;
+const { agents, suggestions, thinkingWords, colors, images, text, help } = siteConfig;
 
 // Marks the intro video as watched. Versioned on purpose: bump the suffix when
 // the video is replaced and everyone sees the new one once, rather than only
@@ -260,7 +260,7 @@ export default function Home() {
   // who never switched, including for questions it cannot answer.
   const [activeAgentId, setActiveAgentId] = useState<AgentId>('orchestrator');
   const [showCapabilities, setShowCapabilities] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
+  const [helpView, setHelpView] = useState<'video' | 'guide' | null>(null);
   // The intro plays once. Kept in localStorage rather than on the user record
   // so this needed no schema change; the cost is that a new browser or a
   // cleared cache shows it again, which for a welcome video is acceptable.
@@ -746,17 +746,26 @@ export default function Home() {
             </div>
           </div>
           <div className="flex items-center gap-4 text-gray-400">
-            {/* Help stays in the header because it is needed mid-conversation,
-                unlike "What can I do?", which belongs with the greeting and
-                disappears once the chat starts. */}
+            {/* Both stay in the header because they are wanted mid-conversation,
+                unlike "What can I do?", which sits with the greeting and goes
+                once the chat starts. Labels hide on narrow screens. */}
             <button
-              onClick={() => setShowHelp(true)}
-              title="Help: intro video and prompting guide"
+              onClick={() => setHelpView('video')}
+              title={help.videoTitle}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm text-gray-500
                          hover:text-nesr-green hover:bg-nesr-green/5 transition-colors"
             >
-              <LifeBuoy size={16} />
-              <span className="hidden sm:inline">Help</span>
+              <PlayCircle size={16} />
+              <span className="hidden sm:inline">{help.videoButton}</span>
+            </button>
+            <button
+              onClick={() => setHelpView('guide')}
+              title={help.guide.title}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm text-gray-500
+                         hover:text-nesr-green hover:bg-nesr-green/5 transition-colors"
+            >
+              <Lightbulb size={16} />
+              <span className="hidden sm:inline">{help.guide.button}</span>
             </button>
           </div>
         </header>
@@ -922,7 +931,8 @@ export default function Home() {
 
       {showIntro && (
         <HelpPanel
-          videoOnly
+          view="video"
+          firstVisit
           onClose={() => {
             setShowIntro(false);
             try { localStorage.setItem(INTRO_SEEN_KEY, new Date().toISOString()); } catch { /* storage blocked */ }
@@ -930,7 +940,7 @@ export default function Home() {
         />
       )}
 
-      {showHelp && <HelpPanel onClose={() => setShowHelp(false)} />}
+      {helpView && <HelpPanel view={helpView} onClose={() => setHelpView(null)} />}
 
       {showCapabilities && (
         <CapabilitiesPanel
