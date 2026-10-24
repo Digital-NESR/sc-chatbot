@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Table2, BarChart3, BarChart2, LineChart as LineIcon, PieChart as PieIcon, Loader2 } from 'lucide-react';
+import { Table2, BarChart3, BarChart2, LineChart as LineIcon, PieChart as PieIcon, Map as MapIcon, Columns3, Loader2 } from 'lucide-react';
 import type { MarkdownTable } from '@/lib/markdownTable';
 import { analyzeTable, type ChartKind } from '@/lib/chartData';
 import { MAX_SERIES, seriesColor } from '@/lib/chartTheme';
@@ -20,19 +20,32 @@ import { MAX_SERIES, seriesColor } from '@/lib/chartTheme';
  * is worse than not offering one.
  */
 
-const ChartCanvas = dynamic(() => import('./ChartCanvas'), {
-    ssr: false,
-    loading: () => (
-        <div className="h-[300px] flex items-center justify-center text-slate-300">
+function spinner(h: number) {
+    const Loading = () => (
+        <div className="flex items-center justify-center text-slate-300" style={{ height: h }}>
             <Loader2 size={20} className="animate-spin" />
         </div>
-    ),
-});
+    );
+    Loading.displayName = 'ChartLoading';
+    return Loading;
+}
+
+const ChartCanvas = dynamic(() => import('./ChartCanvas'), { ssr: false, loading: spinner(300) });
+
+// Its own chunk, separate from recharts: the world atlas is ~108 KB and only
+// answers that actually name countries ever need it.
+const MapView = dynamic(() => import('./MapView'), { ssr: false, loading: spinner(340) });
+
+// Plain React and CSS, but lazy anyway so it rides in the same split as the
+// rest of the views rather than the chat bundle.
+const CompareView = dynamic(() => import('./CompareView'), { ssr: false, loading: spinner(200) });
 
 type View = 'table' | ChartKind;
 
 const VIEWS: { id: View; label: string; icon: typeof Table2 }[] = [
     { id: 'table', label: 'Table', icon: Table2 },
+    { id: 'compare', label: 'Compare', icon: Columns3 },
+    { id: 'map', label: 'Map', icon: MapIcon },
     { id: 'bar', label: 'Columns', icon: BarChart3 },
     { id: 'horizontalBar', label: 'Bars', icon: BarChart2 },
     { id: 'line', label: 'Line', icon: LineIcon },
@@ -60,6 +73,13 @@ export default function ChartBlock({
     const effectiveActive = active ?? a.coplot.slice(0, MAX_SERIES);
 
     const toggleMeasure = (header: string) => {
+        // A map shades by one measure, so the pills behave like a radio group
+        // there. Toggling a second one on would have looked like nothing
+        // happened, because only the first was ever drawn.
+        if (view === 'map') {
+            setActive([header]);
+            return;
+        }
         const next = effectiveActive.includes(header)
             ? effectiveActive.filter(h => h !== header)
             : [...effectiveActive, header];
@@ -68,11 +88,15 @@ export default function ChartBlock({
         setActive(a.measures.filter(m => next.includes(m.header)).map(m => m.header));
     };
 
-    // A share chart divides one total between a few named parts. More than a
-    // handful of slices and it stops being readable, so it is only offered
-    // when the data is actually that shape.
-    const available = (v: View) =>
-        v !== 'pie' || (effectiveActive.length === 1 && a.data.length <= 8);
+    // Each view is offered only when the data is the shape it needs. A share
+    // chart divides one total between a few named parts; a map needs
+    // countries; a comparison needs few enough rows to sit side by side.
+    const available = (v: View) => {
+        if (v === 'pie') return effectiveActive.length === 1 && a.data.length <= 8;
+        if (v === 'map') return a.mappable;
+        if (v === 'compare') return a.comparable;
+        return true;
+    };
 
     const drawKind: ChartKind = view === 'table' ? a.suggested : available(view) ? view : 'bar';
 
@@ -112,7 +136,7 @@ export default function ChartBlock({
                     })}
                 </div>
 
-                {view !== 'table' && a.measures.length > 1 && (
+                {view !== 'table' && view !== 'compare' && a.measures.length > 1 && (
                     <div className="flex flex-wrap items-center gap-1.5">
                         {a.measures.map((m, i) => {
                             const on = effectiveActive.includes(m.header);
@@ -143,7 +167,13 @@ export default function ChartBlock({
                 children
             ) : (
                 <div className="rounded-xl border border-slate-200 bg-white px-1 sm:px-2 pt-3 pb-2">
-                    <ChartCanvas analysis={a} kind={drawKind} active={effectiveActive} />
+                    {drawKind === 'map' ? (
+                        <MapView analysis={a} measure={effectiveActive[0]} />
+                    ) : drawKind === 'compare' ? (
+                        <CompareView table={table} analysis={a} />
+                    ) : (
+                        <ChartCanvas analysis={a} kind={drawKind} active={effectiveActive} />
+                    )}
                     <p className="text-[10.5px] text-slate-400 px-3 pt-1">
                         {notes.join(' · ')}.
                         {hidden > 0 && (

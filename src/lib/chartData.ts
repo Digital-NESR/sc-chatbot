@@ -16,6 +16,7 @@
  */
 
 import type { MarkdownTable } from './markdownTable';
+import { looksLikeCountryColumn } from './geoCountries';
 
 export interface NumericCell {
     value: number;
@@ -174,7 +175,7 @@ function temporalKey(label: string): number {
 const TEMPORAL =
     /^(\d{4}-\d{2}(-\d{2})?|\d{1,2}[-/ ](jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[-/ ]\d{2,4}|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[ -]\d{4}|q[1-4][ -]?\d{4})$/i;
 
-export type ChartKind = 'bar' | 'horizontalBar' | 'line' | 'pie';
+export type ChartKind = 'bar' | 'horizontalBar' | 'line' | 'pie' | 'map' | 'compare';
 
 export interface ChartableTable {
     chartable: true;
@@ -184,6 +185,10 @@ export interface ChartableTable {
     measures: Array<{ header: string; unit: string | null }>;
     /** The measures to draw together by default - see `sharedScale`. */
     coplot: string[];
+    /** True when the label column holds countries, so a map is worth offering. */
+    mappable: boolean;
+    /** True when there are few enough rows to put side by side and compare. */
+    comparable: boolean;
     suggested: ChartKind;
     rowCount: number;
     /** Set when a totals row was excluded, so the panel can say so. */
@@ -312,6 +317,11 @@ export function analyzeTable(table: MarkdownTable): TableAnalysis {
     }
 
     const temporal = labels.every(l => TEMPORAL.test(l));
+    const mappable = looksLikeCountryColumn(table.headers[labelIndex] ?? '', labels);
+
+    // Side by side, a card each. Beyond about eight they stop being readable
+    // at chat width and the table was already the better way to read them.
+    const comparable = !temporal && rows.length >= 2 && rows.length <= 8;
 
     // Largest first for categories, oldest first for dates.
     const ordered = rows
@@ -366,6 +376,8 @@ export function analyzeTable(table: MarkdownTable): TableAnalysis {
         labelHeader: table.headers[labelIndex] ?? 'Label',
         measures: measures.map(m => ({ header: m.header, unit: m.unit })),
         coplot: sharedScale(measures, data),
+        mappable,
+        comparable,
         suggested,
         rowCount: rows.length,
         droppedTotals,
