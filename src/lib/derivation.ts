@@ -21,11 +21,28 @@
 /** What every agent is told to end its answer with. */
 export const DERIVATION_MARKER = '**How I got this:**';
 
+/**
+ * Two or three questions the agent thinks are worth asking next.
+ *
+ * Same idea as the note above and the same failure mode if it goes wrong: a
+ * marker that does not parse leaves a sensible bold line at the end of the
+ * answer rather than markup or a hole.
+ */
+export const FOLLOW_UP_MARKER = '**Ask next:**';
+
+/** Long enough and it stops being a chip and starts being a paragraph. */
+const MAX_FOLLOW_UP = 90;
+
+/** Three is the most that fits on one line without the answer losing the floor. */
+const MAX_FOLLOW_UPS = 3;
+
 export interface SplitAnswer {
-    /** The answer itself, with the note and any separator before it removed. */
+    /** The answer itself, with both notes and any separator before them removed. */
     body: string;
     /** The note, marker stripped. Null when the agent did not include one. */
     derivation: string | null;
+    /** Suggested next questions, bullets stripped. Empty when there were none. */
+    followUps: string[];
 }
 
 /**
@@ -37,7 +54,7 @@ export interface SplitAnswer {
  * imperfectly, an earlier note stays visible in the body as ordinary prose -
  * redundant rather than lost.
  */
-function findMarkerLine(lines: string[]): number {
+function findMarkerLine(lines: string[], marker: string): number {
     let inFence = false;
     let found = -1;
 
@@ -47,33 +64,76 @@ function findMarkerLine(lines: string[]): number {
             continue;
         }
         if (inFence) continue;
-        if (lines[i].trimStart().startsWith(DERIVATION_MARKER)) found = i;
+        if (lines[i].trimStart().startsWith(marker)) found = i;
     }
     return found;
 }
 
-export function splitDerivation(content: string): SplitAnswer {
-    if (!content.includes(DERIVATION_MARKER)) return { body: content, derivation: null };
+/** Reads the lines under the marker as questions, one per bullet or line. */
+function readFollowUps(lines: string[]): string[] {
+    return lines
+        .map(l => l.trim().replace(/^[-*+]\s+/, '').replace(/^\d+[.)]\s+/, '').trim())
+        .map(l => l.replace(/^["'`]|["'`]$/g, '').trim())
+        // A line of asterisks or dashes is the separator before whatever comes
+        // next, not a question.
+        .filter(l => l.length > 0 && l.length <= MAX_FOLLOW_UP && !/^[-*_]{3,}$/.test(l))
+        .slice(0, MAX_FOLLOW_UPS);
+}
+
+/**
+ * Cuts an answer into the answer, the note, and the questions to ask next.
+ *
+ * Both tail sections are found independently and either order works. The
+ * agents are told to put the note last, but one of them putting the questions
+ * last instead should cost nothing - getting the order wrong is exactly the
+ * kind of slip that should degrade into a working answer rather than into a
+ * note with a list of questions buried in it.
+ */
+export function splitAnswer(content: string): SplitAnswer {
+    const hasNote = content.includes(DERIVATION_MARKER);
+    const hasNext = content.includes(FOLLOW_UP_MARKER);
+    if (!hasNote && !hasNext) return { body: content, derivation: null, followUps: [] };
 
     const lines = content.split('\n');
-    const at = findMarkerLine(lines);
-    if (at === -1) return { body: content, derivation: null };
+    const noteAt = hasNote ? findMarkerLine(lines, DERIVATION_MARKER) : -1;
+    const nextAt = hasNext ? findMarkerLine(lines, FOLLOW_UP_MARKER) : -1;
 
-    const noteLines = lines.slice(at);
-    noteLines[0] = noteLines[0].trimStart().slice(DERIVATION_MARKER.length).trimStart();
-    const derivation = noteLines.join('\n').trim();
+    /* Each section runs to the start of the other one, or to the end of the
+       answer when it is the last of the two. */
+    const sectionEnd = (at: number, other: number) =>
+        other > at ? other : lines.length;
+
+    const section = (at: number, other: number, marker: string) => {
+        if (at === -1) return null;
+        const own = lines.slice(at, sectionEnd(at, other));
+        own[0] = own[0].trimStart().slice(marker.length).trimStart();
+        return own;
+    };
+
+    const noteLines = section(noteAt, nextAt, DERIVATION_MARKER);
+    const nextLines = section(nextAt, noteAt, FOLLOW_UP_MARKER);
 
     // A marker with nothing after it says less than no marker at all.
-    if (!derivation) return { body: content, derivation: null };
+    const derivation = noteLines?.join('\n').trim() || null;
+    const followUps = nextLines ? readFollowUps(nextLines) : [];
+
+    /* Both markers turned out to be inside a fenced block, where they are
+       sample text rather than a section of this answer. Nothing to cut. */
+    const starts = [noteAt, nextAt].filter(i => i !== -1);
+    if (!starts.length) return { body: content, derivation: null, followUps: [] };
+
+    let end = Math.min(...starts);
 
     // Drop the horizontal rule the agents are told to put above the note, plus
     // the blank lines around it, so the answer does not end on a stray divider.
-    let end = at;
     while (end > 0 && lines[end - 1].trim() === '') end--;
     if (end > 0 && /^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(lines[end - 1])) {
         end--;
         while (end > 0 && lines[end - 1].trim() === '') end--;
     }
 
-    return { body: lines.slice(0, end).join('\n').trimEnd(), derivation };
+    // Nothing usable behind either marker: leave the answer exactly as it came.
+    if (!derivation && !followUps.length) return { body: content, derivation: null, followUps: [] };
+
+    return { body: lines.slice(0, end).join('\n').trimEnd(), derivation, followUps };
 }

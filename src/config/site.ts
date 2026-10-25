@@ -136,6 +136,12 @@ export const siteConfig = {
         exportTable: 'Export table to Excel',
         exportFilePrefix: 'SupplyChainAI',
 
+        // A failure the user can do something about, rather than one they can
+        // only read. Both put the question back within reach instead of making
+        // them type it again.
+        tryAgain: 'Try again',
+        editQuestion: 'Edit and ask again',
+
         errorMessage:
             'Detailed error: Unable to connect to the agent. Please try again later.',
         genericError:

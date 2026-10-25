@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo, memo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback, memo } from 'react';
 import Image from 'next/image';
-import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2, HelpCircle, PlayCircle, Lightbulb, Square, Microscope, ChevronRight, X } from 'lucide-react';
+import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2, HelpCircle, PlayCircle, Lightbulb, Square, Microscope, ChevronRight, X, RefreshCw, Pencil, CornerDownRight } from 'lucide-react';
 import CapabilitiesPanel from '@/components/CapabilitiesPanel';
 import HelpPanel from '@/components/HelpPanel';
 import ChartBlock from '@/components/ChartBlock';
@@ -16,7 +16,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { siteConfig, agentEndpoint, type AgentId } from '@/config/site';
 import { parseMarkdownTables, splitByTables, normalizeAnswerMarkdown } from '@/lib/markdownTable';
-import { splitDerivation } from '@/lib/derivation';
+import { splitAnswer } from '@/lib/derivation';
 import { exportTablesToXlsx, safeFileName } from '@/lib/exportTables';
 import { readChatStream } from '@/lib/chatStream';
 
@@ -50,6 +50,10 @@ interface Message {
   // Either way the text below is real but incomplete, and saying so is the
   // whole point - a truncated answer that looks finished is a wrong answer.
   incomplete?: 'stopped' | 'interrupted';
+  // Set on a failure bubble: the question that did not get an answer, kept so
+  // it can be asked again without being typed again. Never persisted - a
+  // failure is not a turn in the conversation.
+  retry?: string;
 }
 
 interface ChatSessionMeta {
@@ -159,9 +163,12 @@ const AssistantBubble = memo(function AssistantBubble({
   initialReason = null,
   initialNote = null,
   incomplete,
+  onAsk,
 }: {
   content: string;
   agentName: string;
+  /** Sends one of the agent's suggested next questions. Stable identity. */
+  onAsk: (question: string) => void;
   /** The row id. Absent until the message has been saved. */
   messageId?: string;
   initialFeedback?: 'up' | 'down' | null;
@@ -185,7 +192,7 @@ const AssistantBubble = memo(function AssistantBubble({
   // told to put at the end. Split before anything else looks at the content:
   // the note is prose about the query, so charting or exporting it would be
   // charting the method rather than the data.
-  const { body: rawBody, derivation } = useMemo(() => splitDerivation(content), [content]);
+  const { body: rawBody, derivation, followUps } = useMemo(() => splitAnswer(content), [content]);
 
   // Repair the answer's Markdown before anything parses or renders it: a
   // <br> in a cell shows as literal text and stops the column parsing as a
@@ -307,6 +314,28 @@ const AssistantBubble = memo(function AssistantBubble({
         ) : (
           <ChartBlock key={i} table={seg.table} />
         )
+      )}
+
+      {/* Two or three questions the agent thinks are worth asking next.
+          Deliberately a single quiet line: these are a nudge for someone who
+          does not know what else to ask, not a menu, and an answer that ends
+          in six buttons has stopped being an answer. */}
+      {followUps.length > 0 && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <CornerDownRight size={11} className="text-slate-300 shrink-0" />
+          {followUps.map((q, i) => (
+            <button
+              key={i}
+              onClick={() => onAsk(q)}
+              title={q}
+              className="px-2 py-0.5 rounded-full border border-slate-200 bg-white/70
+                         text-[11px] text-slate-500 transition-colors
+                         hover:border-nesr-green/40 hover:text-nesr-green hover:bg-nesr-green/5"
+            >
+              {q}
+            </button>
+          ))}
+        </div>
       )}
 
       {/* How the answer was reached. Collapsed, because on a good answer
@@ -715,17 +744,25 @@ export default function Home() {
     }
   };
 
-  const sendMessage = async (messageText: string) => {
+  /**
+   * `resend` is a second go at a question that already failed.
+   *
+   * The user's turn is already on screen and already in the database - the
+   * failure happened after both - so repeating either would leave the
+   * conversation asking itself the same thing twice, and n8n reading it back
+   * out of memory that way.
+   */
+  const sendMessage = async (messageText: string, options?: { resend?: boolean }) => {
     if (!messageText.trim() || isLoading) return;
+    const resend = options?.resend ?? false;
 
-    // Add User Message
-    const newUserMessage: Message = {
-      id: Date.now(),
-      role: 'user',
-      content: messageText,
-    };
-
-    setMessages(prev => [...prev, newUserMessage]);
+    if (!resend) {
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        role: 'user',
+        content: messageText,
+      }]);
+    }
     setIsLoading(true);
 
     const controller = new AbortController();
@@ -735,28 +772,37 @@ export default function Home() {
     try {
       // 1. Save user message to database
       let currentSessionId = activeSessionId;
-      try {
-        const saveRes = await fetch('/api/chat/message', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId: currentSessionId,
-            botId: activeAgentId,
-            role: 'user',
-            content: messageText
-          })
-        });
 
-        if (saveRes.ok) {
-           const saveData = await saveRes.json();
-           if (saveData.sessionId && !currentSessionId) {
-               currentSessionId = saveData.sessionId;
-               setActiveSessionId(currentSessionId);
-               fetchSessions(); // refresh history sidebar
-           }
+      // Unless it is already saved. A retry inside an existing conversation
+      // has nothing to write - the question was stored the first time and the
+      // failure came later - and writing it twice would leave the thread
+      // asking itself the same thing twice, in the database and in n8n's
+      // memory. A retry with no session yet still saves, because the save is
+      // also what creates the session.
+      if (!(resend && currentSessionId)) {
+        try {
+          const saveRes = await fetch('/api/chat/message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId: currentSessionId,
+              botId: activeAgentId,
+              role: 'user',
+              content: messageText
+            })
+          });
+
+          if (saveRes.ok) {
+             const saveData = await saveRes.json();
+             if (saveData.sessionId && !currentSessionId) {
+                 currentSessionId = saveData.sessionId;
+                 setActiveSessionId(currentSessionId);
+                 fetchSessions(); // refresh history sidebar
+             }
+          }
+        } catch (err) {
+          console.error('Failed to save user message:', err);
         }
-      } catch (err) {
-        console.error('Failed to save user message:', err);
       }
 
       // The session id is the memory key n8n groups a conversation by, AND the
@@ -818,6 +864,7 @@ export default function Home() {
           id: Date.now() + 1,
           role: 'assistant',
           content: text.genericError,
+          retry: messageText,
         }]);
         return;
       }
@@ -930,6 +977,10 @@ export default function Home() {
         role: 'assistant',
         content: aiContent,
         incomplete,
+        // The malformed check above may have replaced a broken reply with the
+        // generic line. That is a failure like any other, so it gets the same
+        // way out of it.
+        retry: aiContent === text.genericError ? messageText : undefined,
       };
 
       // Both in one go. React batches adjacent updates, so the finished bubble
@@ -988,6 +1039,7 @@ export default function Home() {
         id: Date.now() + 2,
         role: 'assistant',
         content: text.genericError,
+        retry: messageText,
       }]);
       // Hand the text back. It was cleared optimistically on send, and losing
       // a long question to a network blip is worse than a briefly odd input box.
@@ -1017,6 +1069,26 @@ export default function Home() {
       sendMessage(msg);
     }
   };
+
+  /** Ask the same question again, in place of the failure it produced. */
+  const handleRetry = (failed: Message) => {
+    if (!failed.retry || isLoading) return;
+    const question = failed.retry;
+    setMessages(prev => prev.filter(m => m.id !== failed.id));
+    sendMessage(question, { resend: true });
+  };
+
+  /* AssistantBubble is memoised, so it must not be handed a new function on
+     every render - that would re-render every answer on screen for every
+     keystroke in the input box. The ref is updated after each render, and the
+     callback itself never changes. */
+  const sendRef = useRef(sendMessage);
+  useEffect(() => {
+    sendRef.current = sendMessage;
+  });
+  const askFollowUp = useCallback((question: string) => {
+    sendRef.current(question);
+  }, []);
 
   const handleSuggestionClick = (suggestionText: string) => {
     setInputValue(suggestionText);
@@ -1303,10 +1375,42 @@ export default function Home() {
                     </span>
 
                     {msg.role === 'user' ? (
-                      <div
-                        className="relative px-4 py-2.5 text-[13.5px] leading-[1.6] bg-nesr-green text-white rounded-xl rounded-tr-md"
-                      >
-                        <span className="whitespace-pre-wrap">{msg.content}</span>
+                      <div className="group flex flex-col items-end">
+                        <div
+                          className="relative px-4 py-2.5 text-[13.5px] leading-[1.6] bg-nesr-green text-white rounded-xl rounded-tr-md"
+                        >
+                          <span className="whitespace-pre-wrap">{msg.content}</span>
+                        </div>
+                        {/* Iterating on a question is most of how anyone uses
+                            this - the same question, one country over. Putting
+                            it back in the box is enough; it is sent as a new
+                            turn rather than rewriting the one above, so the
+                            conversation stays an honest record of what was
+                            actually asked. */}
+                        <button
+                          onClick={() => handleSuggestionClick(msg.content)}
+                          aria-label={text.editQuestion}
+                          title={text.editQuestion}
+                          className="mt-0.5 mr-1 p-1 rounded-md text-slate-300 hover:text-slate-500
+                                     hover:bg-slate-100 transition-all duration-150
+                                     opacity-40 sm:opacity-0 group-hover:opacity-100 focus:opacity-100"
+                        >
+                          <Pencil size={12} />
+                        </button>
+                      </div>
+                    ) : msg.retry ? (
+                      <div className="relative px-4 py-2.5 text-[13.5px] leading-[1.6] bg-red-50 text-red-600 rounded-xl rounded-tl-md border border-red-100">
+                        <p>{msg.content}</p>
+                        <button
+                          onClick={() => handleRetry(msg)}
+                          disabled={isLoading}
+                          className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-1 rounded-md
+                                     border border-red-200 bg-white text-[11.5px] font-medium text-red-600
+                                     hover:bg-red-50 disabled:opacity-50 transition-colors"
+                        >
+                          <RefreshCw size={11} />
+                          {text.tryAgain}
+                        </button>
                       </div>
                     ) : msg.role === 'system' ? (
                       <div
@@ -1339,6 +1443,7 @@ export default function Home() {
                         initialReason={msg.feedbackReason ?? null}
                         initialNote={msg.feedbackNote ?? null}
                         incomplete={msg.incomplete}
+                        onAsk={askFollowUp}
                       />
                     )}
                   </div>
