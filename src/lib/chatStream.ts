@@ -29,7 +29,33 @@ export type ChatEvent =
     /** The answer finished normally. */
     | { t: 'done' }
     /** It did not. Terminal; nothing follows. */
-    | { t: 'error'; message: string; status?: number };
+    | { t: 'error'; message: string; status?: number; kind?: ChatFailure };
+
+/**
+ * Which kind of failure it was, for the one line the user reads.
+ *
+ * `message` on an error event is the real cause and goes to the failure log;
+ * it is written by whatever broke and can say anything, including things no
+ * user should be shown. This says only enough for the app to choose its own
+ * words - and, more usefully, to know whether trying again is worth the click.
+ *
+ * - `refused`     the agent was turned away by something upstream of it: a
+ *                 usage limit, a key, a safety stop. Retrying does not help
+ *                 until somebody changes something.
+ * - `timeout`     it ran past the deadline. A narrower question often works.
+ * - `unreachable` nothing answered. Usually transient.
+ * - `empty`       it answered, with nothing in it.
+ * - `dropped`     the connection died partway through.
+ */
+export type ChatFailure = 'refused' | 'timeout' | 'unreachable' | 'empty' | 'dropped';
+
+/** Failures where another identical attempt is a reasonable thing to offer. */
+export const RETRYABLE: ReadonlySet<ChatFailure> = new Set<ChatFailure>([
+    'timeout',
+    'unreachable',
+    'empty',
+    'dropped',
+]);
 
 /** One NDJSON line, newline included. */
 export function encodeEvent(event: ChatEvent): string {

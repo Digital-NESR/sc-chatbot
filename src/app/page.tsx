@@ -19,7 +19,7 @@ import { siteConfig, agentEndpoint, type AgentId } from '@/config/site';
 import { parseMarkdownTables, splitByTables, normalizeAnswerMarkdown } from '@/lib/markdownTable';
 import { splitAnswer } from '@/lib/derivation';
 import { exportTablesToXlsx, tablesToTsv, safeFileName } from '@/lib/exportTables';
-import { readChatStream } from '@/lib/chatStream';
+import { readChatStream, RETRYABLE, type ChatFailure } from '@/lib/chatStream';
 
 const { agents, suggestions, thinkingWords, colors, images, text, help } = siteConfig;
 
@@ -53,8 +53,11 @@ interface Message {
   incomplete?: 'stopped' | 'interrupted';
   // Set on a failure bubble: the question that did not get an answer, kept so
   // it can be asked again without being typed again. Never persisted - a
-  // failure is not a turn in the conversation.
+  // failure is not a turn in the conversation. Absent on a failure nothing
+  // can be done about, where offering the same click again is a lie.
   retry?: string;
+  /** Which kind of failure, for a note under a half-finished answer. */
+  failure?: ChatFailure;
 }
 
 interface ChatSessionMeta {
@@ -187,7 +190,25 @@ function ThinkingIndicator({ agentId }: { agentId: AgentId }) {
  * Fire and forget, and it swallows its own errors. The caller is already
  * handling a failure; a failure to report it must not become a second one.
  */
-/** A failure that reportFailure has already been told about. */
+/**
+ * The line a user reads for a failure, and whether to offer another go.
+ *
+ * Everything that fails in here ends up going through this, so there is one
+ * answer to "what does this look like" rather than one per catch block.
+ */
+function failureBubble(kind: ChatFailure | null, question: string): Message {
+  return {
+    id: Date.now() + 2,
+    role: 'assistant',
+    content: kind ? text.failures[kind] : text.genericError,
+    // A refusal is the one that must not offer a retry: the click would do
+    // exactly what just failed, for the same reason, and say so again.
+    retry: !kind || RETRYABLE.has(kind) ? question : undefined,
+    failure: kind ?? undefined,
+  };
+}
+
+/** Not an error: the user's turn was saved the first time round. */
 class ReportedError extends Error {
   constructor(message: string) {
     super(message);
@@ -225,6 +246,7 @@ const AssistantBubble = memo(function AssistantBubble({
   initialReason = null,
   initialNote = null,
   incomplete,
+  failure,
   onAsk,
   onAnnounce,
 }: {
@@ -240,6 +262,9 @@ const AssistantBubble = memo(function AssistantBubble({
   initialReason?: string | null;
   initialNote?: string | null;
   incomplete?: 'stopped' | 'interrupted';
+  /** Why it stopped, when the agent stopped it. Not persisted, so a reloaded
+      conversation falls back to the general note. */
+  failure?: ChatFailure;
 }) {
   const [copied, setCopied] = useState(false);
   const [copiedTable, setCopiedTable] = useState(false);
@@ -966,8 +991,16 @@ export default function Home() {
         // 502 and 504 are already logged server side with the upstream body,
         // which is the part worth having. Anything else reaching here is ours,
         // so read what the route said before throwing the body away.
+        // The route's own body says which kind it was. Read it before the
+        // branch below consumes it.
+        const failed = await response.json().catch(() => null);
+        const kind: ChatFailure | null =
+          failed && typeof failed.kind === 'string' && failed.kind in text.failures
+            ? (failed.kind as ChatFailure)
+            : null;
+
         if (response.status !== 502 && response.status !== 504) {
-          const detail = await response.text().catch(() => '');
+          const detail = JSON.stringify(failed ?? '');
           reportFailure({
             stage: 'upstream',
             status: response.status,
@@ -978,12 +1011,7 @@ export default function Home() {
             question: messageText,
           });
         }
-        setMessages(prev => [...prev, {
-          id: Date.now() + 1,
-          role: 'assistant',
-          content: text.genericError,
-          retry: messageText,
-        }]);
+        setMessages(prev => [...prev, failureBubble(kind, messageText)]);
         announce(text.a11y.failed);
         return;
       }
@@ -991,6 +1019,8 @@ export default function Home() {
       let aiContent = '';
       // Set when the text below stops short of a finished answer.
       let incomplete: 'stopped' | 'interrupted' | undefined;
+      // And why, when it was the agent rather than the user that stopped it.
+      let failedWith: ChatFailure | null = null;
 
       if (wantsStream && response.body) {
         const streamId = Date.now() + 1;
@@ -1019,6 +1049,7 @@ export default function Home() {
               // Bytes are already on the wire, so this cannot come back as a
               // status. Keep what arrived and mark it.
               incomplete = 'interrupted';
+              failedWith = event.kind && event.kind in text.failures ? event.kind : null;
               reportFailure({
                 stage: 'network',
                 message: event.message,
@@ -1047,6 +1078,16 @@ export default function Home() {
         // and an empty bubble saying "stopped" is just noise.
         if (incomplete === 'stopped' && aiContent.trim().length < 40) {
           setStreaming(null);
+          return;
+        }
+
+        /* The agent failed before writing a word. There is no partial answer
+           to annotate, so this is a failure rather than an answer that stops
+           early - and it gets the line that says what happened. */
+        if (incomplete === 'interrupted' && !aiContent.trim()) {
+          setStreaming(null);
+          setMessages(prev => [...prev, failureBubble(failedWith, messageText)]);
+          announce(text.a11y.failed);
           return;
         }
       } else {
@@ -1096,6 +1137,7 @@ export default function Home() {
         role: 'assistant',
         content: aiContent,
         incomplete,
+        failure: failedWith ?? undefined,
         // The malformed check above may have replaced a broken reply with the
         // generic line. That is a failure like any other, so it gets the same
         // way out of it.
@@ -1156,12 +1198,7 @@ export default function Home() {
         botId: activeAgentId,
         question: messageText,
       });
-      setMessages(prev => [...prev, {
-        id: Date.now() + 2,
-        role: 'assistant',
-        content: text.genericError,
-        retry: messageText,
-      }]);
+      setMessages(prev => [...prev, failureBubble('unreachable', messageText)]);
       announce(text.a11y.failed);
       // Hand the text back. It was cleared optimistically on send, and losing
       // a long question to a network blip is worse than a briefly odd input box.
@@ -1937,6 +1974,7 @@ export default function Home() {
                         initialReason={msg.feedbackReason ?? null}
                         initialNote={msg.feedbackNote ?? null}
                         incomplete={msg.incomplete}
+                        failure={msg.failure}
                         onAsk={askFollowUp}
                         onAnnounce={announce}
                       />

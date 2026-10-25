@@ -259,7 +259,7 @@ function toEventStream(
                     onFailure(message, rawBody.slice(0, 2000));
                     // Mid-answer, this appends under the text that did arrive.
                     // Before any text, it is the whole outcome.
-                    send(encodeEvent({ t: 'error', message }));
+                    send(encodeEvent({ t: 'error', message, kind: 'refused' }));
                     finish();
                     return;
                 }
@@ -274,7 +274,7 @@ function toEventStream(
                     if (looksLikeN8nStream(rawBody)) {
                         const message = 'Agent streamed but produced no answer';
                         onFailure(message, rawBody.slice(0, 2000));
-                        send(encodeEvent({ t: 'error', message }));
+                        send(encodeEvent({ t: 'error', message, kind: 'empty' }));
                         finish();
                         return;
                     }
@@ -292,10 +292,10 @@ function toEventStream(
                 // cannot be taken back, so a mid-stream failure is reported
                 // inside the stream. The client appends it under whatever text
                 // it has rather than blanking the answer.
-                const message =
-                    err.name === 'UpstreamTimeout' ? err.message : 'Connection to the agent was lost';
+                const timedOut = err.name === 'UpstreamTimeout';
+                const message = timedOut ? err.message : 'Connection to the agent was lost';
                 onFailure(message, err.stack);
-                send(encodeEvent({ t: 'error', message }));
+                send(encodeEvent({ t: 'error', message, kind: timedOut ? 'timeout' : 'dropped' }));
                 finish();
             });
         },
@@ -389,7 +389,13 @@ export async function POST(request: Request) {
                     userEmail, sessionId, botId: agent, question,
                 });
                 return NextResponse.json(
-                    { error: 'Agent request failed', status: upstream.status },
+                    // 504 is n8n saying it gave up waiting; anything else is
+                    // it being unable to answer at all.
+                    {
+                        error: 'Agent request failed',
+                        status: upstream.status,
+                        kind: upstream.status === 504 ? 'timeout' : 'unreachable',
+                    },
                     { status: 502 }
                 );
             }

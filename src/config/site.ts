@@ -187,6 +187,29 @@ export const siteConfig = {
         genericError:
             'Chatbot is not available due to high demand right now. Please try again later.',
 
+        /* One line per kind of failure, keyed by what the route sends back.
+           They exist because the single line they replace - "try again later"
+           - was wrong about half the time it appeared: it told someone to
+           retry a question that had been refused by a usage limit, and said
+           nothing to someone whose question had simply been too broad.
+
+           Each says what happened, and whether doing the same thing again is
+           worth the click. None of them repeats the real cause: that is
+           written by whatever broke, can say anything, and goes to the
+           failure log where somebody who can act on it will read it. */
+        failures: {
+            refused:
+                'The assistant has been turned away by the service behind it - usually a usage limit. This has been logged, and asking again will not help until it is cleared.',
+            timeout:
+                'That took too long and was stopped. A narrower question usually comes back - one country, one supplier, or a shorter date range.',
+            unreachable:
+                'The assistant could not be reached. This has been logged; asking again often works.',
+            empty:
+                'The assistant finished without producing an answer. This has been logged.',
+            dropped:
+                'The connection dropped before this answer finished.',
+        },
+
         // The collapsed "how was this worked out" note under an answer
         derivationLabel: 'How I got this',
 
