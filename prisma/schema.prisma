@@ -27,6 +27,10 @@ model ChatSession {
   user        User      @relation(fields: [userEmail], references: [email], onDelete: Restrict)
   botId       String
   title       String    @default("New Conversation")
+  // True once a human has renamed the thread. The auto-summary only ever
+  // writes a title that is still the one the app guessed, so a name somebody
+  // chose is never overwritten by one a model wrote.
+  titleSetByUser Boolean @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   isDeleted   Boolean   @default(false)

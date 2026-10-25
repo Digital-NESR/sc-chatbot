@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from 'react';
 import Image from 'next/image';
-import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2, HelpCircle, PlayCircle, Lightbulb, Square, Microscope, ChevronRight, X, RefreshCw, Pencil, CornerDownRight } from 'lucide-react';
+import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2, HelpCircle, PlayCircle, Lightbulb, Square, Microscope, ChevronRight, X, RefreshCw, Pencil, CornerDownRight, Search, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import CapabilitiesPanel from '@/components/CapabilitiesPanel';
 import HelpPanel from '@/components/HelpPanel';
 import ChartBlock from '@/components/ChartBlock';
@@ -61,6 +61,33 @@ interface ChatSessionMeta {
   botId: string;
   title: string;
   updatedAt: string;
+}
+
+/* Remembers whether the sidebar was put away, per browser. */
+const SIDEBAR_COLLAPSED_KEY = 'scai.sidebarCollapsed.v1';
+
+/**
+ * Which heading a conversation sits under.
+ *
+ * By when it was last used rather than when it was started, because that is
+ * what someone looking for "the one I was doing this morning" remembers.
+ */
+const GROUP_ORDER = ['today', 'yesterday', 'week', 'older'] as const;
+type GroupKey = (typeof GROUP_ORDER)[number];
+
+function groupFor(iso: string): GroupKey {
+    // Whole days between the two midnights, so 23:55 last night and 00:05
+    // this morning land either side of the line rather than both in 'today'.
+    const then = new Date(iso);
+    then.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const days = Math.round((today.getTime() - then.getTime()) / 86_400_000);
+    if (days <= 0) return 'today';
+    if (days === 1) return 'yesterday';
+    if (days < 7) return 'week';
+    return 'older';
 }
 
 /* ── Rotating status line shown while an agent is working ── */
@@ -755,6 +782,9 @@ export default function Home() {
   const sendMessage = async (messageText: string, options?: { resend?: boolean }) => {
     if (!messageText.trim() || isLoading) return;
     const resend = options?.resend ?? false;
+    // Captured before anything can set it: this is the turn that creates the
+    // conversation, and so the one worth naming afterwards.
+    const isFirstTurn = !activeSessionId;
 
     if (!resend) {
       setMessages(prev => [...prev, {
@@ -1013,6 +1043,7 @@ export default function Home() {
               prev.map(m => (m.id === localId ? { ...m, dbId } : m))
             );
           })
+          .then(() => { if (isFirstTurn) nameConversation(currentSessionId); })
           .catch(err => console.error('Failed to save AI message:', err));
       }
 
@@ -1090,6 +1121,100 @@ export default function Home() {
     sendRef.current(question);
   }, []);
 
+  /**
+   * Replaces the guessed title with one that says what the thread is about.
+   *
+   * Fire and forget, after the first answer rather than after the first
+   * question: the question alone often does not say what came back, and by
+   * this point the user is reading rather than waiting. A failure leaves the
+   * guessed title in place, which is what the sidebar has always shown.
+   */
+  const nameConversation = async (sessionId: string) => {
+    try {
+      const res = await fetch('/api/chat/title', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data?.renamed || typeof data.title !== 'string') return;
+      setSessions(prev => prev.map(s => (s.id === sessionId ? { ...s, title: data.title } : s)));
+    } catch {
+      // The conversation is perfectly usable under the name it already has.
+    }
+  };
+
+  /* ── The conversation list ── */
+
+  const [collapsed, setCollapsed] = useState(false);
+  const [sessionQuery, setSessionQuery] = useState('');
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+
+  // Read after mount rather than in the initial state, so the server-rendered
+  // markup and the first client render agree about where the sidebar is.
+  useEffect(() => {
+    try {
+      setCollapsed(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1');
+    } catch { /* storage blocked */ }
+  }, []);
+
+  const toggleSidebar = () => {
+    setCollapsed(prev => {
+      const next = !prev;
+      try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0'); } catch { /* storage blocked */ }
+      return next;
+    });
+  };
+
+  // Titles only. The message bodies are not loaded here, and searching what is
+  // on screen is honest in a way that searching half the data would not be.
+  const filteredSessions = useMemo(() => {
+    const q = sessionQuery.trim().toLowerCase();
+    if (!q) return sessions;
+    return sessions.filter(s => s.title.toLowerCase().includes(q));
+  }, [sessions, sessionQuery]);
+
+  const groupedSessions = useMemo(() => {
+    const buckets = new Map<GroupKey, ChatSessionMeta[]>();
+    for (const s of filteredSessions) {
+      const key = groupFor(s.updatedAt);
+      const list = buckets.get(key);
+      if (list) list.push(s);
+      else buckets.set(key, [s]);
+    }
+    // Fixed order regardless of what came back first.
+    return GROUP_ORDER.filter(k => buckets.has(k)).map(k => [k, buckets.get(k)!] as const);
+  }, [filteredSessions]);
+
+  const startRename = (chat: ChatSessionMeta) => {
+    setRenamingId(chat.id);
+    setRenameDraft(chat.title);
+  };
+
+  const commitRename = async (id: string) => {
+    const title = renameDraft.trim();
+    setRenamingId(null);
+    const current = sessions.find(s => s.id === id);
+    if (!current || !title || title === current.title) return;
+
+    // Optimistic, and put back if the write fails - a name that looks saved
+    // and is not is worse than one that never changed.
+    setSessions(prev => prev.map(s => (s.id === id ? { ...s, title } : s)));
+    try {
+      const res = await fetch(`/api/chat/session/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+      if (!res.ok) throw new Error(`Rename failed: ${res.status}`);
+    } catch (err) {
+      console.error('Failed to rename conversation:', err);
+      setSessions(prev => prev.map(s => (s.id === id ? { ...s, title: current.title } : s)));
+    }
+  };
+
   const handleSuggestionClick = (suggestionText: string) => {
     setInputValue(suggestionText);
 
@@ -1122,7 +1247,12 @@ export default function Home() {
         SIDEBAR 
         Width: 280px (fixed)
       */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-[280px] bg-gray-50 border-r border-gray-100 flex-shrink-0 flex flex-col h-full transform transition-transform duration-200 ease-in-out md:relative md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      {/* Nothing inside a put-away sidebar should be reachable by keyboard. */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-[280px] bg-gray-50 border-r border-gray-100 flex-shrink-0 flex flex-col h-full overflow-hidden transform transition-all duration-200 ease-in-out md:relative md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          } ${collapsed ? 'md:w-0 md:min-w-0 md:border-r-0 md:-translate-x-full' : ''}`}
+        aria-hidden={collapsed ? true : undefined}
+      >
 
         {/* Branding Header */}
         <div className="p-6 pb-4">
@@ -1135,10 +1265,18 @@ export default function Home() {
                 className="object-cover"
               />
             </div>
-            <h1 className="text-lg font-bold text-gray-900 tracking-tight">
+            <h1 className="text-lg font-bold text-gray-900 tracking-tight flex-1 min-w-0">
               {text.sidebarTitle}{' '}
               <BetaBadge className="-translate-y-0.5" />
             </h1>
+            <button
+              onClick={toggleSidebar}
+              aria-label={text.sidebar.collapse}
+              title={text.sidebar.collapse}
+              className="hidden md:flex p-1.5 -mr-1 rounded-lg text-gray-300 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+            >
+              <PanelLeftClose size={17} />
+            </button>
           </div>
         </div>
 
@@ -1174,39 +1312,115 @@ export default function Home() {
         </div>
         
         {/* Chat History List */}
-        <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-1 mt-4 border-t border-gray-100 pt-4">
-          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-2">
-            Chat History
+        <div className="flex-1 overflow-y-auto px-4 pb-6 mt-4 border-t border-gray-100 pt-4">
+          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-2">
+            {text.sidebar.history}
           </div>
-          {sessions.map(session => {
-              const sessionAgent = agents.find(a => a.id === session.botId);
-              const isActive = activeSessionId === session.id;
-              return (
-                  <div
-                     key={session.id}
-                     onClick={() => loadSessionHistory(session.id, session.botId)}
-                     className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg transition-all text-sm font-medium relative group cursor-pointer ${isActive ? 'bg-nesr-green/10 text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
-                  >
+
+          {/* Only once the list is long enough to need it. A search box above
+              three conversations is furniture. */}
+          {sessions.length > 6 && (
+            <div className="relative mb-1">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
+              <input
+                value={sessionQuery}
+                onChange={e => setSessionQuery(e.target.value)}
+                placeholder={text.sidebar.search}
+                aria-label={text.sidebar.search}
+                className="w-full pl-7 pr-7 py-1.5 rounded-lg border border-gray-200 bg-white text-xs
+                           text-gray-600 placeholder-gray-300 focus:outline-none focus:border-gray-300"
+              />
+              {sessionQuery && (
+                <button
+                  onClick={() => setSessionQuery('')}
+                  aria-label="Clear search"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-300 hover:text-gray-500"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          )}
+
+          {groupedSessions.length === 0 && (
+            <p className="px-2 py-4 text-xs text-gray-400">
+              {sessionQuery ? text.sidebar.noMatches : text.sidebar.empty}
+            </p>
+          )}
+
+          {groupedSessions.map(([group, chats]) => (
+            <div key={group}>
+              <div className="text-[10px] font-semibold text-gray-300 uppercase tracking-wider px-2 pt-3 pb-1">
+                {text.sidebar.groups[group]}
+              </div>
+              <div className="space-y-1">
+                {chats.map(chat => {
+                  const chatAgent = agents.find(a => a.id === chat.botId);
+                  const isActive = activeSessionId === chat.id;
+                  const isRenaming = renamingId === chat.id;
+
+                  return (
+                    <div
+                      key={chat.id}
+                      onClick={() => { if (!isRenaming) loadSessionHistory(chat.id, chat.botId); }}
+                      className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg transition-all text-sm font-medium relative group cursor-pointer ${isActive ? 'bg-nesr-green/10 text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
+                    >
                       {isActive && (
-                          <div className="absolute left-0 top-1 bottom-1 w-1 bg-nesr-green rounded-r-md" />
+                        <div className="absolute left-0 top-1 bottom-1 w-1 bg-nesr-green rounded-r-md" />
                       )}
                       <div className="flex flex-col items-start min-w-0 text-left flex-1 overflow-hidden">
-                           <span className={`truncate w-full ${isActive ? 'font-semibold text-nesr-green' : ''}`}>{session.title}</span>
-                           <span className="text-[10px] text-gray-400 uppercase tracking-wider truncate w-full">{sessionAgent?.name || 'Bot'}</span>
+                        {isRenaming ? (
+                          /* Escape has to cancel without saving, so the draft
+                             is dropped before the blur handler can commit it. */
+                          <input
+                            value={renameDraft}
+                            autoFocus
+                            onClick={e => e.stopPropagation()}
+                            onChange={e => setRenameDraft(e.target.value)}
+                            onBlur={() => commitRename(chat.id)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
+                              if (e.key === 'Escape') { setRenamingId(null); setRenameDraft(''); }
+                            }}
+                            title={text.sidebar.renameHint}
+                            className="w-full px-1 py-0.5 rounded border border-nesr-green/40 bg-white
+                                       text-sm text-gray-800 focus:outline-none"
+                          />
+                        ) : (
+                          <span className={`truncate w-full ${isActive ? 'font-semibold text-nesr-green' : ''}`}>
+                            {chat.title}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-gray-400 uppercase tracking-wider truncate w-full">
+                          {chatAgent?.name || 'Bot'}
+                        </span>
                       </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteSession(session.id);
-                        }}
-                        aria-label="Delete chat"
-                        className="opacity-0 group-hover:opacity-100 flex-shrink-0 p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all duration-150"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                  </div>
-              );
-          })}
+
+                      {!isRenaming && (
+                        <>
+                          <button
+                            onClick={e => { e.stopPropagation(); startRename(chat); }}
+                            aria-label={text.sidebar.rename}
+                            title={text.sidebar.rename}
+                            className="opacity-0 group-hover:opacity-100 flex-shrink-0 p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-200/70 transition-all duration-150"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            onClick={e => { e.stopPropagation(); handleDeleteSession(chat.id); }}
+                            aria-label="Delete chat"
+                            className="opacity-0 group-hover:opacity-100 flex-shrink-0 p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all duration-150"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
 
         {/* User Profile + Sign Out */}
@@ -1262,10 +1476,25 @@ export default function Home() {
             {/* Hamburger Button (Mobile Only) */}
             <button
               onClick={() => setIsSidebarOpen(true)}
+              aria-label={text.sidebar.expand}
               className="md:hidden p-2 -ml-2 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100"
             >
               <Menu size={20} />
             </button>
+
+            {/* The way back in on a wide screen. It lives in the header rather
+                than floating over the conversation, so it is in the same place
+                whether the sidebar is open or shut. */}
+            {collapsed && (
+              <button
+                onClick={toggleSidebar}
+                aria-label={text.sidebar.expand}
+                title={text.sidebar.expand}
+                className="hidden md:flex p-2 -ml-2 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <PanelLeftOpen size={18} />
+              </button>
+            )}
 
             <span className="text-gray-400 text-sm hidden sm:inline">{text.chattingWith}</span>
             <div className="flex items-center gap-2 bg-nesr-green/5 px-3 py-1 rounded-full border border-nesr-green/10">

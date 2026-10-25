@@ -132,6 +132,26 @@ export const siteConfig = {
             `Supply Chain AI Internal Tool (Beta) • ${agentDisclaimer}`,
         welcomeGreeting: (agentName: string) => `Hello, I am ${agentName}.`,
 
+        /* The conversation list. It grows forever and is the one part of the
+           app people come back to, so it gets a search box, date headings and
+           a way to put a thread out of sight. */
+        sidebar: {
+            history: 'Chat History',
+            search: 'Search chats',
+            noMatches: 'Nothing matches that.',
+            empty: 'No conversations yet.',
+            rename: 'Rename',
+            renameHint: 'Enter to save, Escape to cancel',
+            collapse: 'Hide sidebar',
+            expand: 'Show sidebar',
+            groups: {
+                today: 'Today',
+                yesterday: 'Yesterday',
+                week: 'Previous 7 days',
+                older: 'Older',
+            },
+        },
+
         // Table export
         exportTable: 'Export table to Excel',
         exportFilePrefix: 'SupplyChainAI',
