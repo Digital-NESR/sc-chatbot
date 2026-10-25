@@ -200,7 +200,7 @@ export default function AgentSection({
             <button
                 onClick={handleToggle}
                 aria-expanded={!collapsed}
-                className="group mt-5 mb-3 flex w-full items-center justify-between rounded px-2 py-0.5
+                className="group mt-3 mb-1.5 flex w-full items-center justify-between rounded px-2 py-0.5
                            text-xs font-semibold uppercase tracking-wider text-gray-400
                            transition-colors hover:text-gray-600"
             >

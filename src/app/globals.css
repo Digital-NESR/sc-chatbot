@@ -149,8 +149,21 @@
    edge - which also keeps the scrolling text from appearing to run into the
    rename and delete buttons beside it. */
 .chat-title-clip {
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent 100%);
-  mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent 100%);
+  transition: -webkit-mask-image 150ms ease, mask-image 150ms ease;
+}
+
+/* The rename and delete buttons only exist on hover, and they sit on top of
+   the title rather than beside it - reserving their width permanently cost
+   every row about fifty pixels of title for two buttons that are invisible
+   most of the time. The fade widens to meet them, so the text never reads as
+   running underneath. Scrolling titles still show every word, because the
+   text passes through the fade on its way round. */
+.group:hover .chat-title-clip,
+.group:focus-within .chat-title-clip {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 56px), transparent calc(100% - 42px));
+  mask-image: linear-gradient(to right, #000 calc(100% - 56px), transparent calc(100% - 42px));
 }
 
 .chat-title-track {

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from 'react';
 import Image from 'next/image';
-import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2, HelpCircle, PlayCircle, Lightbulb, Square, Microscope, ChevronRight, X, RefreshCw, Pencil, CornerDownRight, Search, PanelLeftClose, PanelLeftOpen, ArrowDown, Table2 } from 'lucide-react';
+import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2, HelpCircle, PlayCircle, Lightbulb, Square, Microscope, ChevronRight, X, RefreshCw, Pencil, CornerDownRight, Search, PanelLeftClose, PanelLeftOpen, ArrowDown, Table2, ChevronUp } from 'lucide-react';
 import CapabilitiesPanel from '@/components/CapabilitiesPanel';
 import HelpPanel from '@/components/HelpPanel';
 import ChartBlock from '@/components/ChartBlock';
@@ -1243,6 +1243,9 @@ export default function Home() {
   const [sessionQuery, setSessionQuery] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
+  const [profileOpen, setProfileOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
 
   // Read after mount rather than in the initial state, so the server-rendered
   // markup and the first client render agree about where the sidebar is.
@@ -1308,28 +1311,53 @@ export default function Home() {
     textareaRef.current?.focus();
   }, []);
 
-  /* Two shortcuts, both for whatever is in front of you: Escape stops an
-     answer that is still being written, Ctrl+K starts a fresh conversation.
-     Bound on the window rather than the composer, because the composer is
-     where the hands are but not always where the focus is. */
+  /** Opens the sidebar if it is folded away, then puts the cursor in search. */
+  const focusSearch = useCallback(() => {
+    setCollapsed(false);
+    setIsSidebarOpen(true);
+    // After the paint that un-hides it, or there is nothing to focus yet.
+    requestAnimationFrame(() => {
+      searchRef.current?.focus();
+      searchRef.current?.select();
+    });
+  }, []);
+
+  /* Bound on the window rather than the composer, because the composer is
+     where the hands are but not always where the focus is.
+
+     Ctrl+K searches, which is where nearly every other tool puts it, so new
+     chat takes the shift. That is the cheaper of the two to displace: clicking
+     an assistant already starts one. */
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        // Only when there is something to stop. Escape has other jobs - it
-        // cancels a rename and closes a panel - and stealing it would break
-        // both.
+        setProfileOpen(false);
+        // Only stop when there is something to stop. Escape has other jobs -
+        // it cancels a rename and closes a panel - and stealing it would
+        // break both.
         if (abortRef.current) handleStopGenerating();
         return;
       }
       if ((event.ctrlKey || event.metaKey) && (event.key === 'k' || event.key === 'K')) {
         event.preventDefault();
-        startNewChat();
+        if (event.shiftKey) startNewChat();
+        else focusSearch();
       }
     };
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleStopGenerating, startNewChat]);
+  }, [handleStopGenerating, startNewChat, focusSearch]);
+
+  /* A menu that stays open after a click somewhere else is a menu in the way. */
+  useEffect(() => {
+    if (!profileOpen) return;
+    const onDown = (event: PointerEvent) => {
+      if (!profileRef.current?.contains(event.target as Node)) setProfileOpen(false);
+    };
+    window.addEventListener('pointerdown', onDown);
+    return () => window.removeEventListener('pointerdown', onDown);
+  }, [profileOpen]);
 
   const startRename = (chat: ChatSessionMeta) => {
     setRenamingId(chat.id);
@@ -1453,10 +1481,10 @@ export default function Home() {
             Scrolls only while the subordinates are unfolded. Folded, the row
             is short enough not to need it - and overflow-y-auto would clip
             the name pill that hangs below each icon. */}
-        <div className={`flex-none max-h-[40%] px-4 pt-6 pb-2 ${agentsCollapsed ? '' : 'overflow-y-auto'}`}>
+        <div className={`flex-none max-h-[40%] px-4 pt-3 pb-1 ${agentsCollapsed ? '' : 'overflow-y-auto'}`}>
           {masterAgent && (
             <>
-              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-2">
+              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5 px-2">
                 {text.masterAgentLabel}
               </div>
               <AgentButton
@@ -1479,25 +1507,27 @@ export default function Home() {
         </div>
         
         {/* Chat History List */}
-        <div className="flex-1 overflow-y-auto px-4 pb-6 mt-4 border-t border-gray-100 pt-4">
-          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-2">
+        <div className="flex-1 overflow-y-auto px-4 pb-6 mt-2 border-t border-gray-100 pt-3">
+          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5 px-2">
             {text.sidebar.history}
           </div>
 
-          {/* Only once the list is long enough to need it. A search box above
-              three conversations is furniture. */}
-          {sessions.length > 6 && (
-            <div className="relative mb-1">
+          {/* Always present once there is anything to search, because the
+              shortcut that focuses it is always bound - a key that sometimes
+              does nothing is worse than no key. */}
+          {sessions.length > 0 && (
+            <div className="relative mb-1 group/search">
               <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
               <input
+                ref={searchRef}
                 value={sessionQuery}
                 onChange={e => setSessionQuery(e.target.value)}
                 placeholder={text.sidebar.search}
                 aria-label={text.sidebar.search}
-                className="w-full pl-7 pr-7 py-1.5 rounded-lg border border-gray-200 bg-white text-xs
-                           text-gray-600 placeholder-gray-300 focus:outline-none focus:border-gray-300"
+                className="peer w-full pl-7 pr-12 py-1.5 rounded-lg border border-gray-200 bg-white text-xs
+                           text-gray-600 placeholder-gray-300 focus:outline-none focus:border-nesr-green/40"
               />
-              {sessionQuery && (
+              {sessionQuery ? (
                 <button
                   onClick={() => setSessionQuery('')}
                   aria-label="Clear search"
@@ -1505,6 +1535,17 @@ export default function Home() {
                 >
                   <X size={12} />
                 </button>
+              ) : (
+                /* Gone the moment it is being used, where it would only be
+                   telling someone how to do what they are already doing. */
+                <kbd
+                  aria-hidden="true"
+                  className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border
+                             border-gray-200 bg-gray-50 px-1 py-px text-[9.5px] font-medium tracking-wide
+                             text-gray-300 transition-opacity peer-focus:opacity-0"
+                >
+                  Ctrl K
+                </kbd>
               )}
             </div>
           )}
@@ -1575,7 +1616,7 @@ export default function Home() {
                              copy is what makes the loop seamless; it is
                              hidden from screen readers so the title is not
                              read out twice. */
-                          <div className={`w-full overflow-hidden ${long ? 'chat-title-clip' : ''}`}>
+                          <div className="w-full overflow-hidden chat-title-clip">
                             <div className={`chat-title-track ${long ? 'is-long' : ''} ${isActive ? 'font-semibold text-nesr-green' : ''}`}>
                               <span>{chat.title}</span>
                               {long && <span aria-hidden="true">{chat.title}</span>}
@@ -1584,24 +1625,32 @@ export default function Home() {
                         )}
                       </div>
 
+                      {/* Over the title, not beside it. These are wanted for
+                          a second every few weeks; the title is wanted every
+                          time the list is read. */}
                       {!isRenaming && (
-                        <>
+                        <div
+                          className={`absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-0.5
+                                      opacity-0 transition-opacity duration-150
+                                      group-hover:opacity-100 group-focus-within:opacity-100
+                                      ${isActive ? 'bg-nesr-green/10' : 'bg-gray-100'} rounded-md pl-1`}
+                        >
                           <button
                             onClick={e => { e.stopPropagation(); startRename(chat); }}
                             aria-label={text.sidebar.rename}
                             title={text.sidebar.rename}
-                            className="opacity-0 group-hover:opacity-100 flex-shrink-0 p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-200/70 transition-all duration-150"
+                            className="shrink-0 rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-200/70 hover:text-gray-700"
                           >
                             <Pencil size={13} />
                           </button>
                           <button
                             onClick={e => { e.stopPropagation(); handleDeleteSession(chat.id); }}
                             aria-label="Delete chat"
-                            className="opacity-0 group-hover:opacity-100 flex-shrink-0 p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all duration-150"
+                            className="shrink-0 rounded-md p-1 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500"
                           >
                             <Trash2 size={14} />
                           </button>
-                        </>
+                        </div>
                       )}
                     </div>
                   );
@@ -1612,8 +1661,37 @@ export default function Home() {
         </div>
 
         {/* User Profile + Sign Out */}
-        <div className="p-4 border-t border-gray-100 bg-gray-50/50">
-          <div className="flex items-center gap-3 px-2 py-2 rounded-lg mb-1">
+        <div ref={profileRef} className="relative p-3 border-t border-gray-100 bg-gray-50/50">
+
+          {/* Signing out is a once-a-day action at most, and it was sitting
+              permanently under a list people read all day. It lives behind the
+              profile now, which is where everything else puts it. */}
+          {profileOpen && (
+            <div
+              role="menu"
+              className="absolute bottom-full left-3 right-3 mb-1 overflow-hidden rounded-lg border
+                         border-gray-200 bg-white p-1 shadow-lg
+                         animate-in fade-in slide-in-from-bottom-1 duration-150"
+            >
+              <button
+                role="menuitem"
+                onClick={() => signOut({ callbackUrl: '/login' })}
+                className="group flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm
+                           text-gray-600 transition-colors hover:bg-red-50 hover:text-red-600"
+              >
+                <LogOut size={15} className="text-gray-400 transition-colors group-hover:text-red-500" />
+                <span className="font-medium">{text.signOutButton}</span>
+              </button>
+            </div>
+          )}
+
+          <button
+            onClick={() => setProfileOpen(v => !v)}
+            aria-haspopup="menu"
+            aria-expanded={profileOpen}
+            className={`flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors
+                        ${profileOpen ? 'bg-gray-100' : 'hover:bg-gray-100'}`}
+          >
             {session?.user?.image ? (
               <img
                 src={session.user.image}
@@ -1642,13 +1720,10 @@ export default function Home() {
                 {session?.user?.jobTitle || text.defaultJobTitle}
               </p>
             </div>
-          </div>
-          <button
-            onClick={() => signOut({ callbackUrl: '/login' })}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 transition-all duration-150 group"
-          >
-            <LogOut size={15} className="transition-colors group-hover:text-red-500" />
-            <span className="font-medium">{text.signOutButton}</span>
+            <ChevronUp
+              size={14}
+              className={`shrink-0 text-gray-300 transition-transform duration-200 ${profileOpen ? '' : 'rotate-180'}`}
+            />
           </button>
         </div>
       </aside>

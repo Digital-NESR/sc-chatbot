@@ -665,7 +665,8 @@ export const siteConfig = {
                conversation, so a button saying so again was one more thing to
                read for something you can already do. */
             shortcuts: [
-                { keys: 'Ctrl K', what: 'Start a new conversation. Clicking an assistant does the same thing.' },
+                { keys: 'Ctrl K', what: 'Search your conversations.' },
+                { keys: 'Ctrl Shift K', what: 'Start a new conversation. Clicking an assistant does the same thing.' },
                 { keys: 'Esc', what: 'Stop an answer that is still being written.' },
                 { keys: 'Shift Enter', what: 'A new line in your question instead of sending it.' },
             ],
