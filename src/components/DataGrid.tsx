@@ -212,9 +212,11 @@ export default function DataGrid({ table }: { table: MarkdownTable }) {
 
             {/* Only speaks when it has something to say: that the table is long
                 enough to have scrolled, or that what is on screen is no longer
-                the order the agent returned. */}
+                the order the agent returned. It is also a live region: a
+                re-sort is a change a sighted reader watches happen and nobody
+                else does, and this line already says exactly what changed. */}
             {(tall || sort) && (
-                <p className="text-[10.5px] text-slate-400 px-1 pt-1">
+                <p role="status" aria-live="polite" className="text-[10.5px] text-slate-400 px-1 pt-1">
                     {body.length} rows
                     {sort && (
                         <>

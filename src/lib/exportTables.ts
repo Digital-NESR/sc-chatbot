@@ -58,6 +58,31 @@ function columnWidth(header: string, rows: string[][], index: number): number {
     return Math.min(MAX_COL_WIDTH, Math.max(MIN_COL_WIDTH, longest + 2));
 }
 
+/**
+ * The same tables as tab-separated text, for pasting straight into a sheet.
+ *
+ * Sits between the two things that already existed. Copy gives the Markdown,
+ * which pastes into Excel as one long string per row; Export gives a file,
+ * which is heavy when someone wants three columns in a cell range. This is
+ * Ctrl+V and the cells land as cells.
+ *
+ * Ragged rows are padded to the header width, because a short row would
+ * otherwise shift every cell after it into the wrong column.
+ */
+export function tablesToTsv(tables: MarkdownTable[]): string {
+    // A tab or a newline inside a cell would end the cell or the row, so the
+    // one thing this must do is flatten them.
+    const cell = (value: string | undefined) => (value ?? '').replace(/[\t\r\n]+/g, ' ').trim();
+
+    return tables
+        .map(table =>
+            [table.headers, ...table.rows]
+                .map(row => table.headers.map((_, i) => cell(row[i])).join('\t'))
+                .join('\n'),
+        )
+        .join('\n\n');
+}
+
 /** Strip characters Windows and macOS refuse in filenames. */
 export function safeFileName(name: string): string {
     return name

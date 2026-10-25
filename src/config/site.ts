@@ -140,6 +140,7 @@ export const siteConfig = {
             search: 'Search chats',
             noMatches: 'Nothing matches that.',
             empty: 'No conversations yet.',
+            newChat: 'New chat',
             rename: 'Rename',
             renameHint: 'Enter to save, Escape to cancel',
             collapse: 'Hide sidebar',
@@ -154,6 +155,26 @@ export const siteConfig = {
 
         // Table export
         exportTable: 'Export table to Excel',
+        copyTable: 'Copy table for Excel',
+        jumpToLatest: 'Jump to latest',
+
+        /* What the interface says only to a screen reader.
+           State changes only - never the answer text itself, which commits
+           about ten times a second and would be read out as a stutter of
+           half-sentences restarting over each other. The answer is read the
+           normal way, once, when the reader chooses to go to it. */
+        a11y: {
+            working: (agentName: string) => `${agentName} is working`,
+            answerReceived: 'Answer received',
+            stopped: 'Stopped before the answer finished',
+            failed: 'That did not work',
+            copied: 'Copied',
+            tableCopied: 'Table copied, ready to paste into a spreadsheet',
+            ratingSaved: 'Rating saved',
+            ratingCleared: 'Rating removed',
+            loadingHistory: 'Loading conversation',
+            conversationLoaded: (turns: number) => `Conversation loaded, ${turns} messages`,
+        },
         exportFilePrefix: 'SupplyChainAI',
 
         // A failure the user can do something about, rather than one they can
@@ -178,7 +199,10 @@ export const siteConfig = {
         feedback: {
             prompt: 'What went wrong?',
             optional: 'optional',
-            dismiss: 'Dismiss',
+            // On the cross that closes the reason row. It had to be asked
+            // about, which means it read as "undo my rating" - so it now says
+            // what it actually does.
+            dismiss: 'Skip - your rating is already saved',
             thanks: 'Thanks - noted.',
             notePlaceholder: 'In a few words...',
             reasons: [

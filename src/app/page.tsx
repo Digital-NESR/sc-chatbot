@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from 'react';
 import Image from 'next/image';
-import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2, HelpCircle, PlayCircle, Lightbulb, Square, Microscope, ChevronRight, X, RefreshCw, Pencil, CornerDownRight, Search, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2, HelpCircle, PlayCircle, Lightbulb, Square, Microscope, ChevronRight, X, RefreshCw, Pencil, CornerDownRight, Search, PanelLeftClose, PanelLeftOpen, ArrowDown, Table2, Plus } from 'lucide-react';
 import CapabilitiesPanel from '@/components/CapabilitiesPanel';
 import HelpPanel from '@/components/HelpPanel';
 import ChartBlock from '@/components/ChartBlock';
@@ -17,7 +17,7 @@ import remarkGfm from 'remark-gfm';
 import { siteConfig, agentEndpoint, type AgentId } from '@/config/site';
 import { parseMarkdownTables, splitByTables, normalizeAnswerMarkdown } from '@/lib/markdownTable';
 import { splitAnswer } from '@/lib/derivation';
-import { exportTablesToXlsx, safeFileName } from '@/lib/exportTables';
+import { exportTablesToXlsx, tablesToTsv, safeFileName } from '@/lib/exportTables';
 import { readChatStream } from '@/lib/chatStream';
 
 const { agents, suggestions, thinkingWords, colors, images, text, help } = siteConfig;
@@ -88,6 +88,31 @@ function groupFor(iso: string): GroupKey {
     if (days === 1) return 'yesterday';
     if (days < 7) return 'week';
     return 'older';
+}
+
+/**
+ * While a stored conversation is being fetched.
+ *
+ * Three grey blocks rather than a spinner: the shape of what is coming says
+ * more than a dot does, and the view does not jump when the real messages
+ * replace them. Hidden from screen readers - the live region says "Loading
+ * conversation" once, which is the whole of the information.
+ */
+function HistorySkeleton() {
+  return (
+    <div
+      aria-hidden="true"
+      className="max-w-3xl lg:max-w-6xl xl:max-w-7xl mx-auto flex flex-col gap-4 pt-8 animate-pulse"
+    >
+      {[0, 1, 2].map(i => (
+        <div key={i} className={`flex ${i % 2 === 0 ? 'justify-end' : 'justify-start'}`}>
+          <div
+            className={`rounded-xl bg-slate-100 ${i % 2 === 0 ? 'h-10 w-1/3' : 'h-28 w-4/5'}`}
+          />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 /* ── Rotating status line shown while an agent is working ── */
@@ -191,11 +216,14 @@ const AssistantBubble = memo(function AssistantBubble({
   initialNote = null,
   incomplete,
   onAsk,
+  onAnnounce,
 }: {
   content: string;
   agentName: string;
   /** Sends one of the agent's suggested next questions. Stable identity. */
   onAsk: (question: string) => void;
+  /** Says something to a screen reader. Stable identity. */
+  onAnnounce: (message: string) => void;
   /** The row id. Absent until the message has been saved. */
   messageId?: string;
   initialFeedback?: 'up' | 'down' | null;
@@ -204,6 +232,7 @@ const AssistantBubble = memo(function AssistantBubble({
   incomplete?: 'stopped' | 'interrupted';
 }) {
   const [copied, setCopied] = useState(false);
+  const [copiedTable, setCopiedTable] = useState(false);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(initialFeedback);
   const [reason, setReason] = useState<string | null>(initialReason);
   const [note, setNote] = useState<string | null>(initialNote);
@@ -237,9 +266,26 @@ const AssistantBubble = memo(function AssistantBubble({
     try {
       await navigator.clipboard.writeText(content);
       setCopied(true);
+      onAnnounce(text.a11y.copied);
       setTimeout(() => setCopied(false), 2000);
     } catch {
       console.error('Failed to copy text');
+    }
+  };
+
+  /* Tab-separated, so the cells arrive in a spreadsheet as cells. Copying the
+     Markdown puts each row in one cell, and the Excel export is a file to open
+     rather than something to paste - this is the one someone building a sheet
+     out of three answers actually wants. */
+  const handleCopyTable = async () => {
+    if (tables.length === 0) return;
+    try {
+      await navigator.clipboard.writeText(tablesToTsv(tables));
+      setCopiedTable(true);
+      onAnnounce(text.a11y.tableCopied);
+      setTimeout(() => setCopiedTable(false), 2000);
+    } catch {
+      console.error('Failed to copy table');
     }
   };
 
@@ -285,6 +331,7 @@ const AssistantBubble = memo(function AssistantBubble({
     // round trip to see it land. If the write fails it goes back, because a
     // thumb that looks saved and is not is worse than one that never moved.
     setFeedback(next);
+    onAnnounce(next ? text.a11y.ratingSaved : text.a11y.ratingCleared);
     setReason(null);
     setNote(null);
     setNoteDraft('');
@@ -416,6 +463,22 @@ const AssistantBubble = memo(function AssistantBubble({
               <Loader2 size={14} className="animate-spin" />
             ) : (
               <FileSpreadsheet size={14} />
+            )}
+          </button>
+        )}
+
+        {/* Copy the tables as cells, for pasting into a sheet */}
+        {tables.length > 0 && (
+          <button
+            onClick={handleCopyTable}
+            aria-label={text.copyTable}
+            title={text.copyTable}
+            className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors duration-150"
+          >
+            {copiedTable ? (
+              <Check size={14} className="text-emerald-500" />
+            ) : (
+              <Table2 size={14} />
             )}
           </button>
         )}
@@ -559,6 +622,28 @@ export default function Home() {
   // Start with empty messages to show the Welcome View
   const [messages, setMessages] = useState<Message[]>([]);
 
+  // What a screen reader is told. Nothing else renders it.
+  const [announcement, setAnnouncement] = useState('');
+
+  // Shown when the reader has scrolled away from the bottom, so there is a way
+  // back to the answer still being written.
+  const [showJump, setShowJump] = useState(false);
+
+  // A stored conversation on its way. Separate from isLoading, which also
+  // means "an agent is working" and puts a different thing on screen.
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  /**
+   * Says something to a screen reader, once.
+   *
+   * A live region announces on CHANGE, so saying "Copied" twice in a row would
+   * be silent the second time. The zero-width space makes the text different
+   * without making it different to read.
+   */
+  const announce = useCallback((message: string) => {
+    setAnnouncement(prev => (prev.replace(/​+$/, '') === message ? message + '​' : message));
+  }, []);
+
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -579,11 +664,11 @@ export default function Home() {
     setStreaming(null);
   };
 
-  const handleStopGenerating = () => {
+  const handleStopGenerating = useCallback(() => {
     if (!abortRef.current) return;
     stoppedByUserRef.current = true;
     abortRef.current.abort();
-  };
+  }, []);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const autoResize = () => {
@@ -655,6 +740,24 @@ export default function Home() {
    */
   const stickToBottomRef = useRef(true);
 
+  // Mirrors showJump so the scroll handler, which fires continuously, only
+  // calls setState on the frame the answer actually changes.
+  const jumpRef = useRef(false);
+
+  const handleScroll = () => {
+    const near = isNearBottom();
+    stickToBottomRef.current = near;
+    if (jumpRef.current !== !near) {
+      jumpRef.current = !near;
+      setShowJump(!near);
+    }
+  };
+
+  const jumpToLatest = () => {
+    stickToBottomRef.current = true;
+    scrollToBottom(true);
+  };
+
   const isNearBottom = () => {
     const el = scrollAreaRef.current;
     if (!el) return true;
@@ -701,6 +804,8 @@ export default function Home() {
     abortInFlight();
     try {
       setIsLoading(true);
+      setLoadingHistory(true);
+      announce(text.a11y.loadingHistory);
       const res = await fetch(`/api/chat/history?sessionId=${sessionId}`);
       if (res.ok) {
          const data = await res.json();
@@ -718,6 +823,7 @@ export default function Home() {
              setActiveSessionId(sessionId);
              setActiveAgentId(botId as AgentId);
              setIsSidebarOpen(false);
+             announce(text.a11y.conversationLoaded(data.length));
          }
       }
     } catch (e) {
@@ -725,6 +831,7 @@ export default function Home() {
       setMessages([]);
     } finally {
       setIsLoading(false);
+      setLoadingHistory(false);
     }
   };
 
@@ -791,6 +898,7 @@ export default function Home() {
       }]);
     }
     setIsLoading(true);
+    announce(text.a11y.working(activeAgentName));
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -893,6 +1001,7 @@ export default function Home() {
           content: text.genericError,
           retry: messageText,
         }]);
+        announce(text.a11y.failed);
         return;
       }
 
@@ -1015,6 +1124,7 @@ export default function Home() {
       // frame with neither on screen.
       setMessages(prev => [...prev, newAiMessage]);
       setStreaming(null);
+      announce(incomplete ? text.a11y.stopped : text.a11y.answerReceived);
 
       // 2. Save AI message to database in the background.
       // Still fire and forget as far as the user is concerned, but the row id
@@ -1069,6 +1179,7 @@ export default function Home() {
         content: text.genericError,
         retry: messageText,
       }]);
+      announce(text.a11y.failed);
       // Hand the text back. It was cleared optimistically on send, and losing
       // a long question to a network blip is worse than a briefly odd input box.
       setInputValue(prev => (prev.trim() ? prev : messageText));
@@ -1184,6 +1295,48 @@ export default function Home() {
     // Fixed order regardless of what came back first.
     return GROUP_ORDER.filter(k => buckets.has(k)).map(k => [k, buckets.get(k)!] as const);
   }, [filteredSessions]);
+
+  /**
+   * A blank conversation with the agent already selected.
+   *
+   * Everything it touches is a setter or a ref, so it never changes identity -
+   * which is what lets the keyboard binding below hold it without re-binding
+   * on every keystroke in the composer.
+   */
+  const startNewChat = useCallback(() => {
+    stoppedByUserRef.current = false;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setStreaming(null);
+    setActiveSessionId(null);
+    setMessages([]);
+    setSessionQuery('');
+    setIsSidebarOpen(false);
+    textareaRef.current?.focus();
+  }, []);
+
+  /* Two shortcuts, both for whatever is in front of you: Escape stops an
+     answer that is still being written, Ctrl+K starts a fresh conversation.
+     Bound on the window rather than the composer, because the composer is
+     where the hands are but not always where the focus is. */
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        // Only when there is something to stop. Escape has other jobs - it
+        // cancels a rename and closes a panel - and stealing it would break
+        // both.
+        if (abortRef.current) handleStopGenerating();
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && (event.key === 'k' || event.key === 'K')) {
+        event.preventDefault();
+        startNewChat();
+      }
+    };
+
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [handleStopGenerating, startNewChat]);
 
   const startRename = (chat: ChatSessionMeta) => {
     setRenamingId(chat.id);
@@ -1325,6 +1478,19 @@ export default function Home() {
           <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-2">
             {text.sidebar.history}
           </div>
+
+          <button
+            onClick={startNewChat}
+            className="w-full flex items-center gap-2 px-3 py-2 mb-1 rounded-lg border border-dashed
+                       border-gray-200 text-xs font-medium text-gray-500 transition-colors
+                       hover:text-nesr-green hover:border-nesr-green/40 hover:bg-nesr-green/5"
+          >
+            <Plus size={14} />
+            {text.sidebar.newChat}
+            {/* The shortcut lives here because this is where someone looks for
+                the action. A shortcut with no visible home is one nobody finds. */}
+            <span className="ml-auto text-[10px] text-gray-300 font-normal tracking-wide">Ctrl K</span>
+          </button>
 
           {/* Only once the list is long enough to need it. A search box above
               three conversations is furniture. */}
@@ -1545,11 +1711,13 @@ export default function Home() {
             animate no matter what the JS asked for. */}
         <div
           ref={scrollAreaRef}
-          onScroll={() => { stickToBottomRef.current = isNearBottom(); }}
+          onScroll={handleScroll}
           className="flex-1 overflow-y-auto px-4 sm:px-8 pb-32 md:pb-40"
         >
 
-          {messages.length === 0 ? (
+          {loadingHistory ? (
+            <HistorySkeleton />
+          ) : messages.length === 0 ? (
             /* Welcome View (Gemini Style) */
             <div className="h-full w-full max-w-[100vw] overflow-x-hidden flex flex-col items-center justify-center -mt-10 px-4 animate-in fade-in duration-500">
               <div className="relative h-24 w-24 rounded-full overflow-hidden shadow-xl mb-8 ring-4 ring-gray-50 bg-white p-1 shrink-0">
@@ -1682,6 +1850,7 @@ export default function Home() {
                         initialNote={msg.feedbackNote ?? null}
                         incomplete={msg.incomplete}
                         onAsk={askFollowUp}
+                        onAnnounce={announce}
                       />
                     )}
                   </div>
@@ -1730,6 +1899,25 @@ export default function Home() {
         {/* Input Area */}
         <div className="absolute bottom-0 left-0 right-0 p-6 pt-0 pointer-events-none bg-gradient-to-t from-white via-white/80 to-transparent z-20">
           <div className="max-w-[700px] lg:max-w-6xl xl:max-w-7xl mx-auto pointer-events-auto mt-4">
+
+            {/* Only while the reader has scrolled away from it. Scrolling up
+                mid-answer stops the view following along, which is right - but
+                without this there is no way back except scrolling by hand
+                against text that is still growing. */}
+            {showJump && messages.length > 0 && (
+              <div className="flex justify-center mb-2">
+                <button
+                  onClick={jumpToLatest}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/95 backdrop-blur
+                             border border-gray-200 shadow-md text-[11.5px] font-medium text-gray-500
+                             hover:text-nesr-green hover:border-nesr-green/40 transition-colors"
+                >
+                  <ArrowDown size={12} />
+                  {text.jumpToLatest}
+                </button>
+              </div>
+            )}
+
             <div className="relative shadow-[0_8px_40px_rgb(0,0,0,0.08)] hover:shadow-[0_8px_40px_rgb(0,0,0,0.12)] transition-shadow duration-300 rounded-2xl bg-white/90 backdrop-blur-xl ring-1 ring-gray-200 group focus-within:ring-2 focus-within:ring-nesr-green/20">
 
 
@@ -1798,6 +1986,14 @@ export default function Home() {
         </div>
 
       </main>
+
+      {/* Everything the interface knows and does not show: which agent is
+          working, that an answer arrived, that a rating saved. Visually
+          nothing; to a screen reader it is the difference between a page that
+          narrates itself and ninety seconds of silence. */}
+      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+        {announcement}
+      </div>
 
       {showIntro && (
         <HelpPanel
