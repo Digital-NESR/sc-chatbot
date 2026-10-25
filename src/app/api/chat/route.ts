@@ -7,7 +7,9 @@ import { logAppError } from '@/lib/logError';
 import {
     encodeEvent,
     textFromBufferedBody,
+    errorFromN8nLine,
     itemFromN8nLine,
+    looksLikeN8nStream,
     NDJSON_CONTENT_TYPE,
 } from '@/lib/chatStream';
 
@@ -168,6 +170,15 @@ function toEventStream(
      * rest, without this route needing to know any node's name.
      */
     let answerNodeId: string | null = null;
+    /**
+     * What the agent said went wrong, in its own words.
+     *
+     * Set by an `error` chunk, which is the whole response when the model
+     * provider refuses - a quota ceiling, a bad key, a safety stop. It arrives
+     * instead of any text, so it has to be carried to the end of the stream
+     * and used there rather than being treated as an unrecognised line.
+     */
+    let upstreamError: string | null = null;
     /** Kept only until the first delta proves the upstream is streaming. */
     let rawBody = '';
     let heartbeat: ReturnType<typeof setInterval> | null = null;
@@ -192,6 +203,16 @@ function toEventStream(
             const consumeLine = (line: string) => {
                 const trimmed = line.trim();
                 if (!trimmed) return;
+
+                // The agent refusing is not an unrecognised line. Keep the
+                // first one: a retried node reports the same ceiling three
+                // times over, and the first is the one with the context.
+                const failure = errorFromN8nLine(trimmed);
+                if (failure !== null) {
+                    if (upstreamError === null) upstreamError = failure;
+                    return;
+                }
+
                 const item = itemFromN8nLine(trimmed);
                 if (item === null) return;
 
@@ -228,9 +249,36 @@ function toEventStream(
                 consumeLine(lineBuffer);
                 lineBuffer = '';
 
+                /* The agent said why it could not answer. Report that, rather
+                   than whatever the body happens to contain - the whole point
+                   is that this message reaches the failure log intact, where
+                   it is the difference between "raise the API limit" and
+                   twenty-four identical mysteries. */
+                if (upstreamError !== null) {
+                    const message = `Agent error: ${upstreamError}`;
+                    onFailure(message, rawBody.slice(0, 2000));
+                    // Mid-answer, this appends under the text that did arrive.
+                    // Before any text, it is the whole outcome.
+                    send(encodeEvent({ t: 'error', message }));
+                    finish();
+                    return;
+                }
+
                 if (!sawItem) {
-                    // Never streamed. Recover the answer the old way so a
-                    // workflow that has not been converted still works.
+                    /* Never streamed. Recover the answer the old way so a
+                       workflow that has not been converted still works - but
+                       only if the body is actually an answer. A page of n8n
+                       stream chunks is a workflow that streamed and produced
+                       nothing, and passing it off as the answer is how an
+                       outage reads as a formatting bug. */
+                    if (looksLikeN8nStream(rawBody)) {
+                        const message = 'Agent streamed but produced no answer';
+                        onFailure(message, rawBody.slice(0, 2000));
+                        send(encodeEvent({ t: 'error', message }));
+                        finish();
+                        return;
+                    }
+
                     const text = textFromBufferedBody(rawBody);
                     if (text) send(encodeEvent({ t: 'delta', v: text }));
                 }

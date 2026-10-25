@@ -105,9 +105,21 @@ function parseEvent(line: string): ChatEvent | null {
  *
  * One JSON object per line. `begin` and `end` bracket a node run and carry no
  * text, so only `item` is worth anything to us.
+ *
+ * There is a fifth kind, and missing it cost a week of mislabelled failures:
+ *
+ *   {"type":"error","content":"You have reached your specified API usage
+ *    limits. You will regain access on 2026-11-01 at 00:00 UTC.","metadata":…}
+ *
+ * When the model provider refuses, THAT is the whole response - no items ever
+ * arrive. Ignoring the line left the route thinking the workflow had simply
+ * never been converted to streaming, so it handed the raw NDJSON to the
+ * browser as if it were the answer. The user got "the chatbot is busy" and the
+ * failure log got "agent returned a JSON envelope", twenty-four times, while
+ * the actual sentence explaining it sat unread in the body.
  */
 export interface N8nStreamChunk {
-    type: 'begin' | 'item' | 'end' | string;
+    type: 'begin' | 'item' | 'end' | 'error' | string;
     content?: string;
     metadata?: Record<string, unknown>;
 }
@@ -147,6 +159,41 @@ export function itemFromN8nLine(line: string): N8nItem | null {
 
     const nodeId = parsed.metadata?.nodeId;
     return { text: parsed.content, nodeId: typeof nodeId === 'string' ? nodeId : '' };
+}
+
+/**
+ * The upstream's own error message from one line, or null.
+ *
+ * Returned verbatim. This is the one place where the agent gets to say what
+ * actually went wrong, and paraphrasing it would throw away the only thing
+ * that makes the failure actionable - a quota ceiling, a revoked key and a
+ * malformed tool call all read identically once they have been summarised
+ * into "the agent failed".
+ */
+export function errorFromN8nLine(line: string): string | null {
+    let parsed: N8nStreamChunk;
+    try {
+        parsed = JSON.parse(line) as N8nStreamChunk;
+    } catch {
+        return null;
+    }
+    if (parsed?.type !== 'error') return null;
+
+    const content = typeof parsed.content === 'string' ? parsed.content.trim() : '';
+    return content || 'The agent reported an error with no detail';
+}
+
+/**
+ * Whether a body is n8n's own stream rather than an answer.
+ *
+ * The buffered fallback exists for a workflow that was never converted to
+ * streaming, and it must never fire for one that streamed and failed: handing
+ * a page of `{"type":"begin"…}` to the browser as the answer is how this went
+ * unnoticed in the first place.
+ */
+export function looksLikeN8nStream(body: string): boolean {
+    const first = body.trimStart().slice(0, 200);
+    return /^\{"type"\s*:\s*"(begin|item|end|error)"/.test(first);
 }
 
 /**
