@@ -741,9 +741,6 @@ export default function Home() {
     }
   }, [status]);
 
-  // Don't render anything while the session is being checked or if redirecting
-  if (status === 'loading' || status === 'unauthenticated') return null;
-
   const handleAgentChange = (id: AgentId) => {
     abortInFlight();
     setActiveAgentId(id);
@@ -1231,6 +1228,18 @@ export default function Home() {
   };
 
 
+
+  /* Nothing to draw while the session is being checked, or while the redirect
+     to /login is on its way.
+
+     This guard has to come AFTER every hook in the component, not before.
+     React identifies a hook by the order it was called in, so a return that
+     skips nine of them on the first render and runs them on the second is not
+     a shortcut - it is a different component as far as React is concerned, and
+     it throws rather than guessing which state belongs to which hook. That is
+     exactly what happened: the guard sat above the sidebar and follow-up hooks
+     and took the whole app down the moment a session resolved. */
+  if (status === 'loading' || status === 'unauthenticated') return null;
 
   return (
     <div className="flex h-[100dvh] w-full bg-white overflow-hidden font-sans text-slate-900">
