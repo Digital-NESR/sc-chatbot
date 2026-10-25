@@ -2,11 +2,12 @@
 
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from 'react';
 import Image from 'next/image';
-import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2, HelpCircle, PlayCircle, Lightbulb, Square, Microscope, ChevronRight, X, RefreshCw, Pencil, CornerDownRight, Search, PanelLeftClose, PanelLeftOpen, ArrowDown, Table2, Plus } from 'lucide-react';
+import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2, HelpCircle, PlayCircle, Lightbulb, Square, Microscope, ChevronRight, X, RefreshCw, Pencil, CornerDownRight, Search, PanelLeftClose, PanelLeftOpen, ArrowDown, Table2 } from 'lucide-react';
 import CapabilitiesPanel from '@/components/CapabilitiesPanel';
 import HelpPanel from '@/components/HelpPanel';
 import ChartBlock from '@/components/ChartBlock';
 import BetaBadge from '@/components/BetaBadge';
+import AgentSection, { AgentButton } from '@/components/AgentSection';
 import StreamingMarkdown from '@/components/StreamingMarkdown';
 import FreshnessIndicator from '@/components/FreshnessIndicator';
 import { markdownComponents } from '@/components/markdownComponents';
@@ -65,6 +66,15 @@ interface ChatSessionMeta {
 
 /* Remembers whether the sidebar was put away, per browser. */
 const SIDEBAR_COLLAPSED_KEY = 'scai.sidebarCollapsed.v1';
+
+/* Whether the four specialists are folded down to a row of icons. */
+const AGENTS_COLLAPSED_KEY = 'scai.agentsCollapsed.v1';
+
+/* Past this many characters a sidebar title is cut off, so hovering it scrolls
+   it. Judged on length rather than measured: a measurement per row, repeated
+   on every render of a list that grows forever, costs more than it is worth
+   for a decision this reversible. */
+const MARQUEE_AFTER = 26;
 
 /**
  * Which heading a conversation sits under.
@@ -691,39 +701,7 @@ export default function Home() {
 
   // Rendered for both groups, so the master agent and the subordinates stay
   // visually identical apart from where they sit.
-  const renderAgentButton = (agent: (typeof agents)[number]) => {
-    const isActive = activeAgentId === agent.id && activeSessionId === null;
-    return (
-    <button
-      key={agent.id}
-      onClick={() => handleAgentChange(agent.id as AgentId)}
-      className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all text-sm font-medium relative group ${isActive
-        ? 'bg-nesr-green/10 text-gray-900 shadow-sm ring-1 ring-black/5'
-        : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
-        }`}
-    >
-      {/* Active Indicator Border */}
-      {isActive && (
-        <div className="absolute left-0 top-1 bottom-1 w-1 bg-nesr-green rounded-r-md" />
-      )}
-
-      {/* Icon */}
-      <agent.icon
-        size={20}
-        className={`transition-colors ${isActive ? 'text-nesr-green' : 'text-gray-400 group-hover:text-gray-600'
-          }`}
-      />
-
-      {/* Name */}
-      <div className="flex flex-col items-start text-left">
-        <span className={isActive ? 'font-semibold text-nesr-green' : ''}>
-          {agent.name}
-        </span>
-        {isActive && <span className="text-[10px] text-gray-500 font-normal opacity-80 leading-tight">{agent.description}</span>}
-      </div>
-    </button>
-    );
-  };
+  const pickAgent = (id: string) => handleAgentChange(id as AgentId);
 
   /**
    * Following the answer down, without fighting anyone who scrolls up.
@@ -886,9 +864,14 @@ export default function Home() {
   const sendMessage = async (messageText: string, options?: { resend?: boolean }) => {
     if (!messageText.trim() || isLoading) return;
     const resend = options?.resend ?? false;
-    // Captured before anything can set it: this is the turn that creates the
-    // conversation, and so the one worth naming afterwards.
-    const isFirstTurn = !activeSessionId;
+    /* Whether this turn is the one worth naming afterwards.
+       A brand-new conversation, obviously - but also one whose only answers so
+       far have been failures, because the naming call never ran for those and
+       the thread would otherwise keep its guessed title for good. Once a real
+       answer exists this is false, so the model is asked once per
+       conversation and never again. */
+    const isFirstTurn =
+      !activeSessionId || !messages.some(m => m.role === 'assistant' && !m.retry);
 
     if (!resend) {
       setMessages(prev => [...prev, {
@@ -1256,6 +1239,7 @@ export default function Home() {
   /* ── The conversation list ── */
 
   const [collapsed, setCollapsed] = useState(false);
+  const [agentsCollapsed, setAgentsCollapsed] = useState(false);
   const [sessionQuery, setSessionQuery] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
@@ -1265,8 +1249,17 @@ export default function Home() {
   useEffect(() => {
     try {
       setCollapsed(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1');
+      setAgentsCollapsed(localStorage.getItem(AGENTS_COLLAPSED_KEY) === '1');
     } catch { /* storage blocked */ }
   }, []);
+
+  const toggleAgents = () => {
+    setAgentsCollapsed(prev => {
+      const next = !prev;
+      try { localStorage.setItem(AGENTS_COLLAPSED_KEY, next ? '1' : '0'); } catch { /* storage blocked */ }
+      return next;
+    });
+  };
 
   const toggleSidebar = () => {
     setCollapsed(prev => {
@@ -1456,21 +1449,33 @@ export default function Home() {
           </a>
         </div>
 
-        {/* Agent List */}
-        <div className="flex-none max-h-[40%] overflow-y-auto px-4 pt-6 pb-2 space-y-1">
+        {/* Agent List.
+            Scrolls only while the subordinates are unfolded. Folded, the row
+            is short enough not to need it - and overflow-y-auto would clip
+            the name pill that hangs below each icon. */}
+        <div className={`flex-none max-h-[40%] px-4 pt-6 pb-2 ${agentsCollapsed ? '' : 'overflow-y-auto'}`}>
           {masterAgent && (
             <>
               <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-2">
                 {text.masterAgentLabel}
               </div>
-              {renderAgentButton(masterAgent)}
-              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 mt-5 px-2">
-                {text.agentsLabel}
-              </div>
+              <AgentButton
+                agent={masterAgent}
+                isActive={activeAgentId === masterAgent.id && activeSessionId === null}
+                onPick={pickAgent}
+              />
             </>
           )}
 
-          {subordinateAgents.map(renderAgentButton)}
+          <AgentSection
+            label={text.agentsLabel}
+            agents={subordinateAgents}
+            activeAgentId={activeAgentId}
+            activeSessionId={activeSessionId}
+            collapsed={agentsCollapsed}
+            onToggle={toggleAgents}
+            onPick={pickAgent}
+          />
         </div>
         
         {/* Chat History List */}
@@ -1478,19 +1483,6 @@ export default function Home() {
           <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-2">
             {text.sidebar.history}
           </div>
-
-          <button
-            onClick={startNewChat}
-            className="w-full flex items-center gap-2 px-3 py-2 mb-1 rounded-lg border border-dashed
-                       border-gray-200 text-xs font-medium text-gray-500 transition-colors
-                       hover:text-nesr-green hover:border-nesr-green/40 hover:bg-nesr-green/5"
-          >
-            <Plus size={14} />
-            {text.sidebar.newChat}
-            {/* The shortcut lives here because this is where someone looks for
-                the action. A shortcut with no visible home is one nobody finds. */}
-            <span className="ml-auto text-[10px] text-gray-300 font-normal tracking-wide">Ctrl K</span>
-          </button>
 
           {/* Only once the list is long enough to need it. A search box above
               three conversations is furniture. */}
@@ -1534,16 +1526,33 @@ export default function Home() {
                   const isActive = activeSessionId === chat.id;
                   const isRenaming = renamingId === chat.id;
 
+                  const ChatIcon = chatAgent?.icon;
+                  const long = chat.title.length > MARQUEE_AFTER;
+
                   return (
                     <div
                       key={chat.id}
                       onClick={() => { if (!isRenaming) loadSessionHistory(chat.id, chat.botId); }}
-                      className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg transition-all text-sm font-medium relative group cursor-pointer ${isActive ? 'bg-nesr-green/10 text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
+                      title={chat.title}
+                      className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-all text-[12.5px] font-medium relative group cursor-pointer ${isActive ? 'bg-nesr-green/10 text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
                     >
                       {isActive && (
                         <div className="absolute left-0 top-1 bottom-1 w-1 bg-nesr-green rounded-r-md" />
                       )}
-                      <div className="flex flex-col items-start min-w-0 text-left flex-1 overflow-hidden">
+
+                      {/* Which assistant answered, as its own icon rather than
+                          a second line of text underneath. The name was
+                          costing every row twice its height to say something
+                          the icon says at a glance. */}
+                      {ChatIcon && !isRenaming && (
+                        <ChatIcon
+                          size={13}
+                          aria-label={chatAgent?.name}
+                          className={`shrink-0 ${isActive ? 'text-nesr-green' : 'text-gray-300 group-hover:text-gray-500'}`}
+                        />
+                      )}
+
+                      <div className="min-w-0 flex-1 overflow-hidden text-left">
                         {isRenaming ? (
                           /* Escape has to cancel without saving, so the draft
                              is dropped before the blur handler can commit it. */
@@ -1559,16 +1568,20 @@ export default function Home() {
                             }}
                             title={text.sidebar.renameHint}
                             className="w-full px-1 py-0.5 rounded border border-nesr-green/40 bg-white
-                                       text-sm text-gray-800 focus:outline-none"
+                                       text-[12.5px] text-gray-800 focus:outline-none"
                           />
                         ) : (
-                          <span className={`truncate w-full ${isActive ? 'font-semibold text-nesr-green' : ''}`}>
-                            {chat.title}
-                          </span>
+                          /* A long title scrolls past on hover. The second
+                             copy is what makes the loop seamless; it is
+                             hidden from screen readers so the title is not
+                             read out twice. */
+                          <div className={`w-full overflow-hidden ${long ? 'chat-title-clip' : ''}`}>
+                            <div className={`chat-title-track ${long ? 'is-long' : ''} ${isActive ? 'font-semibold text-nesr-green' : ''}`}>
+                              <span>{chat.title}</span>
+                              {long && <span aria-hidden="true">{chat.title}</span>}
+                            </div>
+                          </div>
                         )}
-                        <span className="text-[10px] text-gray-400 uppercase tracking-wider truncate w-full">
-                          {chatAgent?.name || 'Bot'}
-                        </span>
                       </div>
 
                       {!isRenaming && (

@@ -131,6 +131,21 @@ export default function HelpPanel({
                                     </div>
                                 );
                             })}
+
+                            <div className="rounded-lg border border-gray-200 bg-gray-50/70 px-4 py-3">
+                                <h3 className="text-sm font-semibold text-gray-600 mb-2">Shortcuts</h3>
+                                <ul className="space-y-1.5">
+                                    {help.guide.shortcuts.map((s) => (
+                                        <li key={s.keys} className="flex items-baseline gap-2.5 text-sm text-gray-700">
+                                            <kbd className="shrink-0 rounded border border-gray-300 bg-white px-1.5 py-0.5
+                                                            text-[10.5px] font-medium tracking-wide text-gray-500">
+                                                {s.keys}
+                                            </kbd>
+                                            <span>{s.what}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
                         </div>
                     )}
                 </div>

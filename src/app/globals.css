@@ -126,3 +126,47 @@
     @apply bg-background text-foreground;
   }
 }
+
+/*
+ * A conversation title that is too long for the sidebar, read by scrolling it
+ * past like a departure board.
+ *
+ * Two copies of the title with a fixed gap, moved by exactly half the track
+ * plus half the gap - which lands the second copy where the first began, so
+ * the loop has no seam. It holds still at each end for long enough to read
+ * the start and the finish.
+ *
+ * Only on hover, and only on titles long enough to be cut off: a row of
+ * permanently moving text is unreadable, and moving text nobody asked to move
+ * is worse.
+ */
+@keyframes scai-marquee {
+  0%, 14%   { transform: translateX(0); }
+  86%, 100% { transform: translateX(calc(-50% - 0.6rem)); }
+}
+
+/* The last few pixels of a cut-off title fade out instead of ending on a hard
+   edge - which also keeps the scrolling text from appearing to run into the
+   rename and delete buttons beside it. */
+.chat-title-clip {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent 100%);
+}
+
+.chat-title-track {
+  display: inline-flex;
+  gap: 1.2rem;
+  white-space: nowrap;
+  will-change: transform;
+}
+
+.group:hover .chat-title-track.is-long {
+  animation: scai-marquee 6.5s linear infinite;
+}
+
+/* Someone who has asked not to see movement does not get a moving title. */
+@media (prefers-reduced-motion: reduce) {
+  .group:hover .chat-title-track.is-long {
+    animation: none;
+  }
+}

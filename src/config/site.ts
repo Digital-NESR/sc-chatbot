@@ -140,7 +140,6 @@ export const siteConfig = {
             search: 'Search chats',
             noMatches: 'Nothing matches that.',
             empty: 'No conversations yet.',
-            newChat: 'New chat',
             rename: 'Rename',
             renameHint: 'Enter to save, Escape to cancel',
             collapse: 'Hide sidebar',
@@ -660,6 +659,15 @@ export const siteConfig = {
                         'If it says there are none and that surprises you, ask again another way. A wrong filter and an empty table look identical.',
                     ],
                 },
+            ],
+            /* The two keys worth knowing. They live here rather than in the
+               sidebar: clicking an assistant already starts a fresh
+               conversation, so a button saying so again was one more thing to
+               read for something you can already do. */
+            shortcuts: [
+                { keys: 'Ctrl K', what: 'Start a new conversation. Clicking an assistant does the same thing.' },
+                { keys: 'Esc', what: 'Stop an answer that is still being written.' },
+                { keys: 'Shift Enter', what: 'A new line in your question instead of sending it.' },
             ],
         },
     },
