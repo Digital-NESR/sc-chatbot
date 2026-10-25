@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo, memo } from 'react';
 import Image from 'next/image';
-import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2, HelpCircle, PlayCircle, Lightbulb, Square, Microscope, ChevronRight } from 'lucide-react';
+import { ArrowUp, LogOut, Copy, Check, Menu, ThumbsUp, ThumbsDown, Trash2, LayoutGrid, FileSpreadsheet, Loader2, HelpCircle, PlayCircle, Lightbulb, Square, Microscope, ChevronRight, X } from 'lucide-react';
 import CapabilitiesPanel from '@/components/CapabilitiesPanel';
 import HelpPanel from '@/components/HelpPanel';
 import ChartBlock from '@/components/ChartBlock';
@@ -43,6 +43,9 @@ interface Message {
   // and an unsaved message cannot carry a rating, so it stays optional.
   dbId?: string;
   feedback?: 'up' | 'down' | null;
+  // Only ever set alongside a thumbs-down, and only when the user chose to say.
+  feedbackReason?: string | null;
+  feedbackNote?: string | null;
   // Set when the user pressed stop, or when the connection dropped partway.
   // Either way the text below is real but incomplete, and saying so is the
   // whole point - a truncated answer that looks finished is a wrong answer.
@@ -153,6 +156,8 @@ const AssistantBubble = memo(function AssistantBubble({
   agentName,
   messageId,
   initialFeedback = null,
+  initialReason = null,
+  initialNote = null,
   incomplete,
 }: {
   content: string;
@@ -160,10 +165,19 @@ const AssistantBubble = memo(function AssistantBubble({
   /** The row id. Absent until the message has been saved. */
   messageId?: string;
   initialFeedback?: 'up' | 'down' | null;
+  initialReason?: string | null;
+  initialNote?: string | null;
   incomplete?: 'stopped' | 'interrupted';
 }) {
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(initialFeedback);
+  const [reason, setReason] = useState<string | null>(initialReason);
+  const [note, setNote] = useState<string | null>(initialNote);
+  const [noteDraft, setNoteDraft] = useState(initialNote ?? '');
+  // The reason row is open while it is being answered and closed afterwards.
+  // A reloaded conversation opens closed: the rating was given, and asking
+  // again about an answer from last week is asking the wrong person.
+  const [askReason, setAskReason] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [showDerivation, setShowDerivation] = useState(false);
 
@@ -209,27 +223,68 @@ const AssistantBubble = memo(function AssistantBubble({
     }
   };
 
+  const save = async (payload: {
+    feedback: 'up' | 'down' | null;
+    reason?: string | null;
+    note?: string | null;
+  }) => {
+    if (!messageId) return false;
+    try {
+      const res = await fetch('/api/chat/feedback', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId, ...payload }),
+      });
+      if (!res.ok) throw new Error(`Feedback failed: ${res.status}`);
+      return true;
+    } catch (err) {
+      console.error('Failed to save feedback:', err);
+      return false;
+    }
+  };
+
   const toggleFeedback = async (type: 'up' | 'down') => {
     const next = feedback === type ? null : type;
-    const previous = feedback;
+    const was = { feedback, reason, note };
 
     // Optimistic: a rating is one click and the user should not wait on a
     // round trip to see it land. If the write fails it goes back, because a
     // thumb that looks saved and is not is worse than one that never moved.
     setFeedback(next);
-    if (!messageId) return;
+    setReason(null);
+    setNote(null);
+    setNoteDraft('');
+    // The thumb is already on its way. Everything below is an extra, which is
+    // why it appears after the rating rather than in front of it.
+    setAskReason(next === 'down');
 
-    try {
-      const res = await fetch('/api/chat/feedback', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messageId, feedback: next }),
-      });
-      if (!res.ok) throw new Error(`Feedback failed: ${res.status}`);
-    } catch (err) {
-      console.error('Failed to save feedback:', err);
-      setFeedback(previous);
+    if (!messageId) return;
+    if (!(await save({ feedback: next, reason: null, note: null }))) {
+      setFeedback(was.feedback);
+      setReason(was.reason);
+      setNote(was.note);
+      setAskReason(false);
     }
+  };
+
+  const chooseReason = async (id: string) => {
+    const next = reason === id ? null : id;
+    const was = reason;
+    setReason(next);
+    if (next !== 'other') {
+      setNote(null);
+      setNoteDraft('');
+    }
+    if (!(await save({ feedback: 'down', reason: next, note: next === 'other' ? note : null }))) {
+      setReason(was);
+    }
+  };
+
+  const saveNote = async () => {
+    const text = noteDraft.trim();
+    if (text === (note ?? '')) return;
+    setNote(text || null);
+    await save({ feedback: 'down', reason: 'other', note: text || null });
   };
 
   return (
@@ -349,6 +404,60 @@ const AssistantBubble = memo(function AssistantBubble({
           <ThumbsDown size={14} fill={feedback === 'down' ? 'currentColor' : 'none'} />
         </button>
       </div>
+
+      {/* Why, for anyone who wants to say. It only ever appears after the
+          thumbs-down has already been saved, so ignoring it, dismissing it or
+          closing the tab all leave the rating exactly as it was. */}
+      {askReason && feedback === 'down' && (
+        <div className="mt-1.5 pt-1.5 border-t border-slate-200/70">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[10.5px] text-slate-400 mr-auto">
+              {text.feedback.prompt}{' '}
+              <span className="text-slate-300">({text.feedback.optional})</span>
+            </span>
+            {text.feedback.reasons.map(r => (
+              <button
+                key={r.id}
+                onClick={() => chooseReason(r.id)}
+                aria-pressed={reason === r.id}
+                className={`px-2 py-0.5 rounded-full border text-[10.5px] transition-colors ${reason === r.id
+                    ? 'border-red-200 bg-red-50 text-red-500'
+                    : 'border-slate-200 bg-white/70 text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                  }`}
+              >
+                {r.label}
+              </button>
+            ))}
+            <button
+              onClick={() => setAskReason(false)}
+              aria-label={text.feedback.dismiss}
+              title={text.feedback.dismiss}
+              className="p-0.5 rounded text-slate-300 hover:text-slate-500 transition-colors"
+            >
+              <X size={12} />
+            </button>
+          </div>
+
+          {reason === 'other' && (
+            <input
+              value={noteDraft}
+              onChange={e => setNoteDraft(e.target.value)}
+              onBlur={saveNote}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  e.currentTarget.blur();
+                }
+              }}
+              placeholder={text.feedback.notePlaceholder}
+              autoFocus
+              className="mt-1.5 w-full px-2 py-1 rounded-md border border-slate-200 bg-white
+                         text-[11.5px] text-slate-600 placeholder-slate-300
+                         focus:outline-none focus:border-slate-300"
+            />
+          )}
+        </div>
+      )}
 
       {/* An answer that did not finish says so, on the answer itself. Anyone
           reading it later - including us, in the feedback view - needs to know
@@ -546,6 +655,8 @@ export default function Home() {
                  role: m.role as 'user' | 'assistant' | 'system',
                  content: m.content,
                  feedback: m.feedback ?? null,
+                 feedbackReason: m.feedbackReason ?? null,
+                 feedbackNote: m.feedbackNote ?? null,
                  incomplete: m.incomplete ?? undefined,
              })));
              setActiveSessionId(sessionId);
@@ -1225,6 +1336,8 @@ export default function Home() {
                         agentName={activeAgentName}
                         messageId={msg.dbId}
                         initialFeedback={msg.feedback ?? null}
+                        initialReason={msg.feedbackReason ?? null}
+                        initialNote={msg.feedbackNote ?? null}
                         incomplete={msg.incomplete}
                       />
                     )}

@@ -46,6 +46,14 @@ model Message {
   feedback   String?
   feedbackAt DateTime?
 
+  // Why, in the user's own words or in one of the offered ones. Both optional
+  // on purpose: the thumb saves on its own click and the reason is an extra
+  // that can be skipped, because a rating that demands a form is a rating
+  // nobody gives. feedbackReason is one of the ids in siteConfig.text.feedback
+  // .reasons; feedbackNote is free text, only ever set alongside it.
+  feedbackReason String?
+  feedbackNote   String?  @db.Text
+
   // Triage, written from /admin/feedback rather than by the user. The note is
   // what was actually wrong with the answer, which the thumb on its own never
   // says; reviewStatus is 'resolved' once it has been dealt with, and null

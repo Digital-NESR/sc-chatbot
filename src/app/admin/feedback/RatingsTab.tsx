@@ -31,6 +31,8 @@ type Item = {
     userEmail: string;
     feedback: 'up' | 'down';
     feedbackAt: string | null;
+    feedbackReason: string | null;
+    feedbackNote: string | null;
     answeredAt: string;
     question: string | null;
     content: string;
@@ -41,6 +43,10 @@ type Item = {
 
 const agentName = (botId: string) =>
     siteConfig.agents.find(a => a.id === botId)?.name ?? botId;
+
+/** The label the user actually clicked, from the id that was stored. */
+const reasonLabel = (id: string | null) =>
+    id ? siteConfig.text.feedback.reasons.find(r => r.id === id)?.label ?? id : null;
 
 const when = (iso: string | null) => {
     if (!iso) return '';
@@ -301,6 +307,11 @@ export default function RatingsTab() {
                                             <span className="block text-[13px] text-slate-800 line-clamp-2">
                                                 {i.question ?? '(question not found)'}
                                             </span>
+                                            {i.feedbackReason && (
+                                                <span className="inline-block mt-1 px-1.5 py-0.5 rounded-full bg-red-50 text-red-500 text-[9.5px] font-medium">
+                                                    {reasonLabel(i.feedbackReason)}
+                                                </span>
+                                            )}
                                         </span>
                                     </button>
                                 );
@@ -327,6 +338,16 @@ export default function RatingsTab() {
                                     <h2 className="font-semibold text-slate-900 text-[15px] leading-snug">
                                         {selected.question ?? '(question not found)'}
                                     </h2>
+                                    {selected.feedbackReason && (
+                                        <p className="mt-1.5 text-[12px] text-slate-600">
+                                            <span className="px-1.5 py-0.5 rounded-full bg-red-50 text-red-500 text-[10.5px] font-medium">
+                                                {reasonLabel(selected.feedbackReason)}
+                                            </span>
+                                            {selected.feedbackNote && (
+                                                <span className="ml-2 italic">{selected.feedbackNote}</span>
+                                            )}
+                                        </p>
+                                    )}
                                 </div>
                                 <button
                                     onClick={copyForReview}

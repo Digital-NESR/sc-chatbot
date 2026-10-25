@@ -31,6 +31,8 @@ export async function GET() {
                 content: true,
                 feedback: true,
                 feedbackAt: true,
+                feedbackReason: true,
+                feedbackNote: true,
                 createdAt: true,
                 reviewNote: true,
                 reviewStatus: true,
@@ -68,6 +70,11 @@ export async function GET() {
             userEmail: m.session.userEmail,
             feedback: m.feedback,
             feedbackAt: m.feedbackAt,
+            // What the user said was wrong, as opposed to reviewNote, which is
+            // what we concluded afterwards. Keeping them apart matters: one is
+            // evidence and the other is our reading of it.
+            feedbackReason: m.feedbackReason,
+            feedbackNote: m.feedbackNote,
             answeredAt: m.createdAt,
             question: askedBefore(m.sessionId, m.createdAt),
             content: m.content,

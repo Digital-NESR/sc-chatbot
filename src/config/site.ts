@@ -144,6 +144,26 @@ export const siteConfig = {
         // The collapsed "how was this worked out" note under an answer
         derivationLabel: 'How I got this',
 
+        /* What a thumbs-down can say beyond "wrong".
+           The thumb is already saved by the time these appear, so every one
+           of them is optional - the row can be ignored or dismissed and the
+           rating stands. The ids are stored, not the labels, so the wording
+           can change without orphaning what has already been collected. */
+        feedback: {
+            prompt: 'What went wrong?',
+            optional: 'optional',
+            dismiss: 'Dismiss',
+            thanks: 'Thanks - noted.',
+            notePlaceholder: 'In a few words...',
+            reasons: [
+                { id: 'wrong-number', label: 'Wrong number' },
+                { id: 'missing-rows', label: 'Missing rows' },
+                { id: 'misread', label: 'Misread my question' },
+                { id: 'too-slow', label: 'Too slow' },
+                { id: 'other', label: 'Something else' },
+            ],
+        },
+
         // Streaming
         stopGenerating: 'Stop generating',
         stoppedLabel: 'Stopped — this answer is incomplete.',
