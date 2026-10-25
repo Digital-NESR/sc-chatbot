@@ -124,6 +124,36 @@ type Column =
     | { kind: 'measure'; header: string; index: number; unit: string | null }
     | { kind: 'label'; header: string; index: number; isSeq: boolean; distinct: number; n: number };
 
+/**
+ * A column of numbers that are names rather than quantities.
+ *
+ * Long, distinct, round numbers are a key. Judged on the cells that parse
+ * rather than on all of them, because a `Successor` column of material numbers
+ * has a dash wherever there is no successor, and requiring every cell to parse
+ * let the whole column through as a measure. Nothing is lost by being strict:
+ * a column that really is a quantity almost always says so in its header, and
+ * a measure-sounding header skips the shape tests entirely.
+ *
+ * Shared with the grid, which left-aligns an identifier and right-aligns a
+ * quantity. The two have to agree, or a column charts as a measure while
+ * sitting on the left of its own table like a label.
+ */
+function looksLikeIdentifier(header: string, cells: string[], ok: NumericCell[]): boolean {
+    const hk = headerKind(header);
+    if (hk === 'id') return true;
+    if (hk === 'measure') return false;
+
+    if (cells.some(v => /^0\d+$/.test(v.replace(/[^0-9]/g, '')))) return true;
+
+    const ints = ok.filter(p => Number.isInteger(p.value));
+    return (
+        ok.length >= 3 &&
+        ints.length / ok.length >= 0.8 &&
+        ints.filter(p => String(Math.abs(p.value)).length >= 6).length / ok.length >= 0.8 &&
+        new Set(ok.map(p => p.value)).size / ok.length >= 0.9
+    );
+}
+
 function classifyColumn(headers: string[], rows: string[][], index: number): Column {
     const header = headers[index] ?? '';
     const cells = rows.map(r => (r[index] ?? '').trim()).filter(Boolean);
@@ -132,23 +162,6 @@ function classifyColumn(headers: string[], rows: string[][], index: number): Col
     const ok = cells.map(parseNumericCell).filter((p): p is NumericCell => p !== null);
     const ratio = ok.length / cells.length;
     const units = new Set(ok.map(p => p.unit).filter(Boolean));
-
-    const hk = headerKind(header);
-    const leadingZero = cells.some(v => /^0\d+$/.test(v.replace(/[^0-9]/g, '')));
-
-    // Long, distinct, round numbers are a key, not a quantity. Judged on the
-    // cells that parse rather than on all of them, because a `Successor`
-    // column of material numbers has a dash wherever there is no successor,
-    // and requiring every cell to parse let the whole column through as a
-    // measure. Nothing is lost by being strict here: a column that really is
-    // a quantity almost always says so in its header, and a measure-sounding
-    // header skips this test entirely.
-    const ints = ok.filter(p => Number.isInteger(p.value));
-    const longIds =
-        ok.length >= 3 &&
-        ints.length / ok.length >= 0.8 &&
-        ints.filter(p => String(Math.abs(p.value)).length >= 6).length / ok.length >= 0.8 &&
-        new Set(ok.map(p => p.value)).size / ok.length >= 0.9;
 
     const sequence = isSequence(ok.map(p => p.value));
 
@@ -160,7 +173,7 @@ function classifyColumn(headers: string[], rows: string[][], index: number): Col
 
     // An explicitly measure-sounding header beats the shape heuristics: a
     // 'Line Count' of long distinct integers is still a count.
-    const identifier = hk === 'id' || (hk !== 'measure' && (leadingZero || longIds));
+    const identifier = looksLikeIdentifier(header, cells, ok);
 
     if (ratio >= 0.8 && covered >= 0.6 && !identifier && !sequence && units.size <= 1) {
         return { kind: 'measure', header, index, unit: [...units][0] ?? null };
@@ -173,6 +186,45 @@ function classifyColumn(headers: string[], rows: string[][], index: number): Col
 
 /** A totals row would dwarf every real bar, so it never reaches the chart. */
 const TOTALS = /^(total|grand total|sum|subtotal|overall)\b/i;
+
+/**
+ * A summary row rather than one of the rows being summarised.
+ *
+ * The chart drops it; the grid keeps it but pins it below the sort, because a
+ * total that sorts into the middle of its own column is nonsense.
+ */
+export function isTotalsRow(row: string[]): boolean {
+    return TOTALS.test((row[0] ?? '').trim());
+}
+
+/** How a column reads, for a table being shown rather than charted. */
+export interface ColumnShape {
+    /** Enough cells parse as numbers for the column to sort numerically. */
+    numeric: boolean;
+    /** Right-aligned, tabular figures: a quantity, not an identifier. */
+    alignRight: boolean;
+}
+
+/**
+ * How each column of a table should be lined up and sorted.
+ *
+ * Looser than `classifyColumn`, deliberately. That one decides what is safe to
+ * plot, and refuses a column of mixed units or one that is mostly blank. Both
+ * of those still sort and still line up on the right - a price in $/GAL beside
+ * one in $/LB cannot share an axis, but it is still a number, and reading a
+ * column of numbers is exactly what the alignment is for.
+ */
+export function columnShapes(table: MarkdownTable): ColumnShape[] {
+    return table.headers.map((header, i) => {
+        const cells = table.rows.map(r => (r[i] ?? '').trim()).filter(Boolean);
+        if (!cells.length) return { numeric: false, alignRight: false };
+
+        const ok = cells.map(parseNumericCell).filter((p): p is NumericCell => p !== null);
+        if (ok.length / cells.length < 0.8) return { numeric: false, alignRight: false };
+
+        return { numeric: true, alignRight: !looksLikeIdentifier(header, cells, ok) };
+    });
+}
 
 /**
  * Sorts a date label. A time axis has to run left to right in time; the agents
@@ -282,7 +334,7 @@ function sharedScale(
 }
 
 export function analyzeTable(table: MarkdownTable): TableAnalysis {
-    const rows = table.rows.filter(r => !TOTALS.test((r[0] ?? '').trim()));
+    const rows = table.rows.filter(r => !isTotalsRow(r));
     const droppedTotals = table.rows.length - rows.length;
 
     if (rows.length < 3) return { chartable: false, reason: `only ${rows.length} rows of data` };

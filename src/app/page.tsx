@@ -250,11 +250,7 @@ const AssistantBubble = memo(function AssistantBubble({
             {seg.markdown}
           </ReactMarkdown>
         ) : (
-          <ChartBlock key={i} table={seg.table}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-              {seg.markdown}
-            </ReactMarkdown>
-          </ChartBlock>
+          <ChartBlock key={i} table={seg.table} />
         )
       )}
 

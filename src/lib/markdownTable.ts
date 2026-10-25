@@ -10,6 +10,16 @@
 export interface MarkdownTable {
     headers: string[];
     rows: string[][];
+    /**
+     * The same cells with their inline Markdown left in.
+     *
+     * `headers` and `rows` are cleaned down to the plain text a reader sees,
+     * which is what the classifier and the Excel export want. The grid renders
+     * the cells instead of handing the table to ReactMarkdown, so it needs the
+     * original back to keep a bold total or a linked document number.
+     */
+    rawHeaders: string[];
+    rawRows: string[][];
     /** First line of the table in the source, 0-based and inclusive. */
     startLine: number;
     /** Last line of the table in the source, 0-based and inclusive. */
@@ -89,10 +99,12 @@ export function parseMarkdownTables(markdown: string): MarkdownTable[] {
         const separator = lines[i + 1];
         if (!separator || !isSeparatorRow(separator)) continue;
 
-        const headers = splitRow(lines[i]).map(cleanCell);
+        const rawHeaders = splitRow(lines[i]);
+        const headers = rawHeaders.map(cleanCell);
         if (headers.length === 0) continue;
 
         const rows: string[][] = [];
+        const rawRows: string[][] = [];
         let j = i + 2;
         while (
             j < lines.length &&
@@ -100,11 +112,13 @@ export function parseMarkdownTables(markdown: string): MarkdownTable[] {
             lines[j].trim() !== '' &&
             !/^\s*(```|~~~)/.test(lines[j])
         ) {
-            rows.push(splitRow(lines[j]).map(cleanCell));
+            const cells = splitRow(lines[j]);
+            rawRows.push(cells);
+            rows.push(cells.map(cleanCell));
             j++;
         }
 
-        tables.push({ headers, rows, startLine: i, endLine: j - 1 });
+        tables.push({ headers, rows, rawHeaders, rawRows, startLine: i, endLine: j - 1 });
         i = j - 1;
     }
 

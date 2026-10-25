@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { Table2, BarChart3, BarChart2, LineChart as LineIcon, PieChart as PieIcon, Map as MapIcon, Columns3, Loader2 } from 'lucide-react';
 import type { MarkdownTable } from '@/lib/markdownTable';
 import { analyzeTable, type ChartKind } from '@/lib/chartData';
+import DataGrid from './DataGrid';
 import { MAX_SERIES, seriesColor } from '@/lib/chartTheme';
 
 /**
@@ -14,6 +15,10 @@ import { MAX_SERIES, seriesColor } from '@/lib/chartTheme';
  * rows, in the place the table was, rather than something that opens over the
  * conversation. Switching back is one click, which matters because the table
  * is the thing with the exact figures in it.
+ *
+ * Every table is drawn by DataGrid, chartable or not. A table nobody can chart
+ * is still a table somebody has to read, and sorting a forty-row result is
+ * worth more there than anywhere else.
  *
  * When the data is not shaped for a chart there is no switcher at all, only
  * the table. That silence is deliberate: offering a chart that would mislead
@@ -52,19 +57,12 @@ const VIEWS: { id: View; label: string; icon: typeof Table2 }[] = [
     { id: 'pie', label: 'Share', icon: PieIcon },
 ];
 
-export default function ChartBlock({
-    table,
-    children,
-}: {
-    table: MarkdownTable;
-    /** The table as the Markdown renderer draws it. */
-    children: React.ReactNode;
-}) {
+export default function ChartBlock({ table }: { table: MarkdownTable }) {
     const analysis = useMemo(() => analyzeTable(table), [table]);
     const [view, setView] = useState<View>('table');
     const [active, setActive] = useState<string[] | null>(null);
 
-    if (!analysis.chartable) return <>{children}</>;
+    if (!analysis.chartable) return <DataGrid table={table} />;
     const a = analysis;
 
     // Opens on the measures that can share an axis honestly, capped at the
@@ -171,7 +169,7 @@ export default function ChartBlock({
             </div>
 
             {view === 'table' ? (
-                children
+                <DataGrid table={table} />
             ) : (
                 <div className="rounded-xl border border-slate-200 bg-white px-1 sm:px-2 pt-3 pb-2">
                     {drawKind === 'map' ? (
