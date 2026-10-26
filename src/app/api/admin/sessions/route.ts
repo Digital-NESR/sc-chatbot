@@ -14,19 +14,26 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const userEmail = searchParams.get('userEmail');
+    const q = searchParams.get('q')?.trim();
 
-    if (!userEmail) {
-        return NextResponse.json({ error: 'Missing userEmail parameter' }, { status: 400 });
+    // Two modes: one user's sessions, or a title search across everyone's. The
+    // second is how you find a conversation when you remember what it was
+    // about but not who had it.
+    if (!userEmail && !q) {
+        return NextResponse.json({ error: 'Missing userEmail or q parameter' }, { status: 400 });
     }
 
     try {
         const sessions = await prisma.chatSession.findMany({
-            where: { 
-                userEmail
-            },
+            where: userEmail
+                ? { userEmail }
+                : { title: { contains: q as string, mode: 'insensitive' } },
             orderBy: {
                 updatedAt: 'desc'
-            }
+            },
+            // A search is a way in, not a report - the directory is still there
+            // for anyone wanting the whole list.
+            ...(userEmail ? {} : { take: 25 }),
         });
 
         return NextResponse.json({ sessions });
