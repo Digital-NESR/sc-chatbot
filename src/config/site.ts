@@ -213,6 +213,25 @@ export const siteConfig = {
         // The collapsed "how was this worked out" note under an answer
         derivationLabel: 'How I got this',
 
+        /* The live line while an answer is being worked out.
+           Measured rather than guessed: a question needing two specialists
+           spends three seconds thinking, fifty-nine ASKING, and eight writing.
+           The middle one is the whole wait, so it is the one that has to say
+           something - and the elapsed count beside it is what tells a reader
+           the thing is moving rather than hung. */
+        phases: {
+            orchestrator: {
+                thinking: 'Working out which assistants this needs',
+                consulting: 'Asking the assistants',
+                writing: 'Writing the answer',
+            },
+            specialist: {
+                thinking: 'Working out what to look up',
+                consulting: 'Reading the data',
+                writing: 'Writing the answer',
+            },
+        },
+
         /* What a thumbs-down can say beyond "wrong".
            The thumb is already saved by the time these appear, so every one
            of them is optional - the row can be ignored or dismissed and the

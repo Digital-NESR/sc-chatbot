@@ -18,8 +18,9 @@ import remarkGfm from 'remark-gfm';
 import { siteConfig, agentEndpoint, type AgentId } from '@/config/site';
 import { parseMarkdownTables, splitByTables, normalizeAnswerMarkdown } from '@/lib/markdownTable';
 import { splitAnswer } from '@/lib/derivation';
+import { applyDisplayNames } from '@/config/dataNames';
 import { exportTablesToXlsx, tablesToTsv, safeFileName } from '@/lib/exportTables';
-import { readChatStream, RETRYABLE, type ChatFailure } from '@/lib/chatStream';
+import { readChatStream, RETRYABLE, type ChatFailure, type ChatPhase } from '@/lib/chatStream';
 
 const { agents, suggestions, thinkingWords, colors, images, text, help } = siteConfig;
 
@@ -125,6 +126,38 @@ function HistorySkeleton() {
         </div>
       ))}
     </div>
+  );
+}
+
+/**
+ * The live line while an answer is being worked out.
+ *
+ * It replaces a word that changed every three seconds and meant nothing. The
+ * phase comes from the agent's own run boundaries - the only thing n8n tells
+ * us during the wait - and the seconds come from the clock, which is what
+ * separates "slow" from "hung" for a reader who cannot see either.
+ */
+function PhaseIndicator({ phase, agentId }: { phase: ChatPhase; agentId: AgentId }) {
+  const [seconds, setSeconds] = useState(0);
+
+  useEffect(() => {
+    // Restarts with each phase, so the number is the age of what is happening
+    // now rather than of the whole question.
+    setSeconds(0);
+    const id = setInterval(() => setSeconds(s => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [phase]);
+
+  const words = agentId === 'orchestrator' ? text.phases.orchestrator : text.phases.specialist;
+
+  return (
+    <span className="flex items-center gap-2 text-xs font-medium text-slate-400">
+      <Loader2 size={11} className="animate-spin text-slate-300" />
+      <span className="animate-in fade-in duration-500">{words[phase]}</span>
+      {/* Only once the wait is long enough to be worth timing. Before that the
+          number is noise that draws the eye to a question already answered. */}
+      {seconds >= 3 && <span className="tabular-nums text-slate-300">{seconds}s</span>}
+    </span>
   );
 }
 
@@ -476,7 +509,7 @@ const AssistantBubble = memo(function AssistantBubble({
                             [&_ul]:mt-0 [&_ul]:mb-0 [&_ul]:space-y-1
                             [&_code]:bg-slate-100 [&_code]:text-slate-700 [&_code]:text-[11px]">
               <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                {derivation}
+                {applyDisplayNames(derivation)}
               </ReactMarkdown>
             </div>
           )}
@@ -657,6 +690,9 @@ export default function Home() {
   // Start with empty messages to show the Welcome View
   const [messages, setMessages] = useState<Message[]>([]);
 
+  // Where the agent has got to, while there is still nothing to show.
+  const [phase, setPhase] = useState<ChatPhase | null>(null);
+
   // What a screen reader is told. Nothing else renders it.
   const [announcement, setAnnouncement] = useState('');
 
@@ -697,6 +733,7 @@ export default function Home() {
     abortRef.current?.abort();
     abortRef.current = null;
     setStreaming(null);
+    setPhase(null);
   };
 
   const handleStopGenerating = useCallback(() => {
@@ -906,6 +943,7 @@ export default function Home() {
       }]);
     }
     setIsLoading(true);
+    setPhase(null);
     announce(text.a11y.working(activeAgentName));
 
     const controller = new AbortController();
@@ -1045,6 +1083,9 @@ export default function Home() {
             if (event.t === 'delta') {
               aiContent += event.v;
               commit(false);
+            } else if (event.t === 'step') {
+              setPhase(event.phase);
+              announce(text.phases[activeAgentId === 'orchestrator' ? 'orchestrator' : 'specialist'][event.phase]);
             } else if (event.t === 'error') {
               // Bytes are already on the wire, so this cannot come back as a
               // status. Keep what arrived and mark it.
@@ -1213,6 +1254,7 @@ export default function Home() {
         stoppedByUserRef.current = false;
         setIsLoading(false);
         setStreaming(null);
+        setPhase(null);
       }
     }
   };
@@ -2012,7 +2054,14 @@ export default function Home() {
                   answer, and exactly when it is needed. */}
               {isLoading && !streaming?.content && (
                 <div className="flex w-full justify-start mt-2 px-1">
-                  <ThinkingIndicator agentId={activeAgentId} />
+                  {/* The rotating word only until the agent says where it has
+                      got to, which is about a second in. After that the word
+                      would be saying less than the line next to it. */}
+                  {phase ? (
+                    <PhaseIndicator phase={phase} agentId={activeAgentId} />
+                  ) : (
+                    <ThinkingIndicator agentId={activeAgentId} />
+                  )}
                 </div>
               )}
 

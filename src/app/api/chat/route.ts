@@ -9,6 +9,7 @@ import {
     textFromBufferedBody,
     errorFromN8nLine,
     itemFromN8nLine,
+    runEdgeFromN8nLine,
     looksLikeN8nStream,
     NDJSON_CONTENT_TYPE,
 } from '@/lib/chatStream';
@@ -179,6 +180,25 @@ function toEventStream(
      * and used there rather than being treated as an unrecognised line.
      */
     let upstreamError: string | null = null;
+    /**
+     * The node whose runs are worth narrating.
+     *
+     * The first node to announce a run is the agent: everything else in these
+     * workflows runs after it has finished. Locking onto it keeps a Respond to
+     * Webhook node's own begin and end from reading as a second round of work.
+     */
+    let tracedNodeId: string | null = null;
+    /** How many runs that node has started. */
+    let runCount = 0;
+    /**
+     * Whether a single visible character has been sent yet.
+     *
+     * Not the same as sawItem, which the agent sets within two seconds by
+     * emitting items with empty content while it produces tool calls. Using
+     * that to decide "has it said anything" would mean the silence is never
+     * reported, because by then the flag says it is already talking.
+     */
+    let sawText = false;
     /** Kept only until the first delta proves the upstream is streaming. */
     let rawBody = '';
     let heartbeat: ReturnType<typeof setInterval> | null = null;
@@ -213,6 +233,26 @@ function toEventStream(
                     return;
                 }
 
+                /* The edges of the silence. A run beginning is the agent
+                   starting to think; a run ending without a word written is
+                   it handing off to something slow - specialists, or a
+                   database - which is the part of the wait worth naming. */
+                const edge = runEdgeFromN8nLine(trimmed);
+                if (edge !== null) {
+                    if (tracedNodeId === null) tracedNodeId = edge.nodeId;
+                    if (edge.nodeId !== tracedNodeId) return;
+
+                    if (edge.edge === 'begin') {
+                        runCount += 1;
+                        // A later run means the thinking is over and the words
+                        // are coming; the first is the thinking itself.
+                        send(encodeEvent({ t: 'step', phase: runCount > 1 ? 'writing' : 'thinking' }));
+                    } else if (!sawText) {
+                        send(encodeEvent({ t: 'step', phase: 'consulting' }));
+                    }
+                    return;
+                }
+
                 const item = itemFromN8nLine(trimmed);
                 if (item === null) return;
 
@@ -225,7 +265,10 @@ function toEventStream(
                 // The answer is arriving in pieces; the accumulated copy is
                 // dead weight from here on.
                 rawBody = '';
-                if (item.text) send(encodeEvent({ t: 'delta', v: item.text }));
+                if (item.text) {
+                    sawText = true;
+                    send(encodeEvent({ t: 'delta', v: item.text }));
+                }
             };
 
             res.on('data', (chunk: Buffer) => {

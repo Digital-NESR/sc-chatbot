@@ -26,6 +26,20 @@ export type ChatEvent =
      * connection, to intermediaries as well as to us.
      */
     | { t: 'ping' }
+    /**
+     * Where the agent has got to, before any of the answer exists.
+     *
+     * Measured on a real orchestrated question: 0.3s to 3.2s producing tool
+     * calls, then 59 SECONDS of silence while the specialists work, then the
+     * answer. Four fifths of the wait is that gap, and n8n says nothing during
+     * it beyond a keepalive every thirty seconds - no tool node announces
+     * itself, so there is nothing to report but the shape of the silence.
+     *
+     * That shape is still worth reporting. "Asking the specialists, 23s" is a
+     * different experience from a word that changes every three seconds and
+     * means nothing.
+     */
+    | { t: 'step'; phase: ChatPhase }
     /** The answer finished normally. */
     | { t: 'done' }
     /** It did not. Terminal; nothing follows. */
@@ -47,6 +61,16 @@ export type ChatEvent =
  * - `empty`       it answered, with nothing in it.
  * - `dropped`     the connection died partway through.
  */
+/**
+ * - `thinking`   the agent is working out what to do. It produces tool calls,
+ *                which arrive as items with no content.
+ * - `consulting` it has stopped producing anything and has not written a word.
+ *                On the orchestrator this is the specialists running; on a
+ *                specialist it is a database query.
+ * - `writing`    it has started again, and text is about to arrive.
+ */
+export type ChatPhase = 'thinking' | 'consulting' | 'writing';
+
 export type ChatFailure = 'refused' | 'timeout' | 'unreachable' | 'empty' | 'dropped';
 
 /** Failures where another identical attempt is a reasonable thing to offer. */
@@ -148,6 +172,27 @@ export interface N8nStreamChunk {
     type: 'begin' | 'item' | 'end' | 'error' | string;
     content?: string;
     metadata?: Record<string, unknown>;
+}
+
+/**
+ * A node run starting or finishing, and which node it was.
+ *
+ * `begin` and `end` carry no text, which is exactly why they are useful: they
+ * mark the edges of the silence. Returns null for anything else, including
+ * n8n's own `keepalive`, which says only that the socket is open - something
+ * this app already asserts for itself with its own heartbeat.
+ */
+export function runEdgeFromN8nLine(line: string): { edge: 'begin' | 'end'; nodeId: string } | null {
+    let parsed: N8nStreamChunk;
+    try {
+        parsed = JSON.parse(line) as N8nStreamChunk;
+    } catch {
+        return null;
+    }
+    if (parsed?.type !== 'begin' && parsed?.type !== 'end') return null;
+
+    const nodeId = parsed.metadata?.nodeId;
+    return { edge: parsed.type, nodeId: typeof nodeId === 'string' ? nodeId : '' };
 }
 
 /** One line of an n8n stream that carries text, and which node produced it. */
