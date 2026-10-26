@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Database, AlertTriangle, ChevronDown } from 'lucide-react';
 import type { FreshnessReport, FreshnessSource } from '@/app/api/freshness/route';
+import { tableDisplayName } from '@/config/dataNames';
 
 /**
  * When the data behind an answer was last loaded.
@@ -74,8 +75,8 @@ export default function FreshnessIndicator() {
         status === 'missing'
             ? `${neverLoaded.length} source${neverLoaded.length > 1 ? 's have' : ' has'} never loaded`
             : status === 'stale' && stalest
-              ? `${stalest.table} last loaded ${stalest.daysSince} days ago`
-              : `SAP data as of ${formatWhen(newest?.loadedAt ?? null)}`;
+              ? `${tableDisplayName(stalest.table)} last loaded ${stalest.daysSince} days ago`
+              : `Data as of ${formatWhen(newest?.loadedAt ?? null)}`;
 
     const tone =
         status === 'missing'
@@ -120,15 +121,19 @@ export default function FreshnessIndicator() {
                         <div className="px-3 py-2 border-b border-slate-100">
                             <p className="text-[11px] font-semibold text-slate-700">When each source last loaded</p>
                             <p className="text-[10px] text-slate-400 mt-0.5">
-                                The SAP extract behind Materials AI and Track My Request. Policy documents and
-                                the vendor catalogue load separately and are not listed here.
+                                The supply chain extract behind Materials AI and Track My Request. Policy
+                                documents and the vendor catalogue load separately and are not listed here.
                             </p>
                         </div>
 
                         <ul className="divide-y divide-slate-50">
                             {ordered.map(s => (
                                 <li key={s.table} className="px-3 py-1.5 flex items-baseline justify-between gap-3">
-                                    <span className="text-[11px] text-slate-600 font-mono truncate">{s.table}</span>
+                                    {/* The readable name, with the real table on hover for
+                                        anyone who has to go and look at it. */}
+                                    <span className="text-[11px] text-slate-600 truncate" title={s.table}>
+                                        {tableDisplayName(s.table)}
+                                    </span>
                                     <span
                                         className={`text-[10.5px] shrink-0 ${
                                             s.neverLoaded

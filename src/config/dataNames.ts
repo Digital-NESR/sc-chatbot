@@ -157,6 +157,20 @@ export const DEFAULT_GROUPS: readonly NameGroup[] = [
             in_avl: 'on the approved list',
         },
     },
+    {
+        id: 'loads',
+        title: 'Data loads',
+        hint: 'What the load-time panel calls each source. The loader records its own table names with no schema on them, so these are keyed bare.',
+        names: {
+            gr_data: 'Goods receipts',
+            ub_grir: 'GR/IR balances',
+            ap_aging: 'Payables ageing',
+            release_strategy: 'Approval rules',
+            pr_release: 'Requisition approval queue',
+            po_release: 'PO approval queue',
+            zmb5oa: 'In transit',
+        },
+    },
 ];
 
 /** Every default, flattened. The editor layers the stored ones over this. */
@@ -216,6 +230,19 @@ export function setDisplayNames(overrides: Record<string, string>): void {
  * Safe to run on anything: a name that is not in the table is left exactly as
  * it was, and nothing else in the string is touched.
  */
+/**
+ * The readable name for one source table, given its bare name.
+ *
+ * The load-time panel reads track.data_freshness, which records the loader's
+ * own table names with no schema on them - `mb52`, `supplychain`. Everything
+ * else here is keyed by schema.table, so try the bare key first (the loader
+ * sources are keyed that way), then the two schemas the rest could be in.
+ * Falls back to the raw name: an unnamed table shown as it is beats a guess.
+ */
+export function tableDisplayName(bare: string): string {
+    return active[bare] ?? active[`core.${bare}`] ?? active[`track.${bare}`] ?? bare;
+}
+
 export function applyDisplayNames(text: string): string {
     if (!text) return text;
     activePattern.lastIndex = 0;

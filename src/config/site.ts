@@ -669,7 +669,7 @@ export const siteConfig = {
         },
         guide: {
             title: 'How to ask',
-            intro: 'It reads your real SAP data. It is good at finding things and bad at guessing, so be specific.',
+            intro: 'It reads your real supply chain data. It is good at finding things and bad at guessing, so be specific.',
             button: 'How to ask',
             sections: [
                 {
