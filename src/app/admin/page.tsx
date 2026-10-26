@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { ChevronRight, ArrowLeft, Loader2, User, MessageSquare, Users, Activity, BarChart2, ThumbsDown, ThumbsUp, Search, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -33,20 +33,99 @@ function FeedbackMark({ msg }: {
     const up = msg.feedback === 'up';
     const reason = reasonLabel(msg.feedbackReason);
     return (
-        <div
-            className={`mt-3 pt-2 border-t flex items-start gap-2 text-xs ${
-                up ? 'border-emerald-100 text-emerald-700' : 'border-amber-100 text-amber-700'
-            }`}
-        >
+        <div className={`flex items-start gap-2 text-xs ${up ? 'text-emerald-700' : 'text-amber-700'}`}>
             {up ? <ThumbsUp className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                 : <ThumbsDown className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
             <div className="min-w-0">
                 <span className="font-medium">{up ? 'Rated helpful' : 'Rated unhelpful'}</span>
+                <span className="text-slate-500"> by the user</span>
                 {reason && <span> · {reason}</span>}
                 {msg.feedbackNote && (
                     <p className="mt-0.5 italic text-slate-600 break-words">“{msg.feedbackNote}”</p>
                 )}
             </div>
+        </div>
+    );
+}
+
+/**
+ * Your own verdict on somebody else's answer.
+ *
+ * Kept apart from the user's thumb above rather than replacing it. Most
+ * answers are never rated by the person who got them, so without this the
+ * review queue only ever sees the handful somebody complained about; and
+ * where you and the user disagree, that disagreement is worth having on
+ * record rather than written over.
+ *
+ * Saves on click, optimistically - a rating that waits on a spinner is a
+ * rating nobody gives. If the save fails the thumb goes back and says so.
+ */
+function AdminRating({ msg, onChange }: {
+    msg: { id: string; adminFeedback?: string | null; adminFeedbackBy?: string | null };
+    onChange: (id: string, value: string | null) => void;
+}) {
+    const [saving, setSaving] = useState(false);
+    const [failed, setFailed] = useState(false);
+    const current = msg.adminFeedback ?? null;
+
+    const set = async (value: 'up' | 'down') => {
+        const next = current === value ? null : value;
+        const previous = current;
+        setFailed(false);
+        setSaving(true);
+        onChange(msg.id, next);
+        try {
+            const res = await fetch('/api/admin/feedback', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messageId: msg.id, adminFeedback: next }),
+            });
+            if (!res.ok) throw new Error(await res.text());
+        } catch (err) {
+            console.error(err);
+            onChange(msg.id, previous);
+            setFailed(true);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const btn = (value: 'up' | 'down', Icon: typeof ThumbsUp, on: string) =>
+        `p-1.5 rounded-md border transition-colors disabled:opacity-50 ${
+            current === value ? on : 'border-transparent text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+        }`;
+
+    return (
+        <div className="flex items-center gap-1.5 text-xs">
+            <span className="text-slate-400 mr-0.5">Your rating</span>
+            <button
+                onClick={() => set('up')}
+                disabled={saving}
+                aria-pressed={current === 'up'}
+                title="Mark this answer good"
+                className={btn('up', ThumbsUp, 'border-emerald-200 bg-emerald-50 text-emerald-600')}
+            >
+                <ThumbsUp className="w-3.5 h-3.5" fill={current === 'up' ? 'currentColor' : 'none'} />
+            </button>
+            <button
+                onClick={() => set('down')}
+                disabled={saving}
+                aria-pressed={current === 'down'}
+                title="Flag this answer for review"
+                className={btn('down', ThumbsDown, 'border-red-200 bg-red-50 text-red-600')}
+            >
+                <ThumbsDown className="w-3.5 h-3.5" fill={current === 'down' ? 'currentColor' : 'none'} />
+            </button>
+            {saving && <Loader2 className="w-3 h-3 animate-spin text-slate-400" />}
+            {failed && <span className="text-red-500">Not saved — try again</span>}
+            {!failed && current === 'down' && (
+                <span className="text-slate-400">Queued on the Feedback page</span>
+            )}
+            {!failed && msg.adminFeedbackBy && (
+                <span className="text-slate-300 truncate" title={msg.adminFeedbackBy}>
+                    · {msg.adminFeedbackBy}
+                </span>
+            )}
         </div>
     );
 }
@@ -191,6 +270,12 @@ export default function AdminDashboard() {
         };
         fetchMessages();
     }, [selectedSession]);
+
+    // Written back into the loaded transcript so the thumb stays set while you
+    // keep reading, without refetching the whole conversation per click.
+    const setAdminRating = useCallback((id: string, value: string | null) => {
+        setMessages(prev => prev.map(m => (m.id === id ? { ...m, adminFeedback: value } : m)));
+    }, []);
 
     // --- Derived UI State (ALL HOOKS MUST BE ABOVE EARLY RETURNS) ---
     const totalUsers = users.length;
@@ -379,7 +464,12 @@ export default function AdminDashboard() {
                                                     {msg.content}
                                                 </ReactMarkdown>
                                             </div>
-                                            {!isUser && <FeedbackMark msg={msg} />}
+                                            {!isUser && (
+                                                <div className="mt-3 pt-2 border-t border-slate-100 flex flex-col gap-2">
+                                                    <FeedbackMark msg={msg} />
+                                                    <AdminRating msg={msg} onChange={setAdminRating} />
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 );

@@ -58,6 +58,16 @@ model Message {
   feedbackReason String?
   feedbackNote   String?  @db.Text
 
+  // An admin's own verdict, given from the admin pages on somebody else's
+  // conversation. Deliberately its own column rather than writing over the
+  // user's thumb above: most answers are never rated by the person who got
+  // them, and where the two do disagree that disagreement is the signal worth
+  // keeping. adminFeedbackBy is the admin's email, so a queue of flagged
+  // answers can say who flagged each one.
+  adminFeedback   String?
+  adminFeedbackBy String?
+  adminFeedbackAt DateTime?
+
   // Triage, written from /admin/feedback rather than by the user. The note is
   // what was actually wrong with the answer, which the thumb on its own never
   // says; reviewStatus is 'resolved' once it has been dealt with, and null

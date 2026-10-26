@@ -29,10 +29,15 @@ type Item = {
     botId: string;
     sessionTitle: string;
     userEmail: string;
-    feedback: 'up' | 'down';
+    // Either can be null: a user rates from the chat, an admin from /admin,
+    // and an answer is in this list if it carries at least one of the two.
+    feedback: 'up' | 'down' | null;
     feedbackAt: string | null;
     feedbackReason: string | null;
     feedbackNote: string | null;
+    adminFeedback: 'up' | 'down' | null;
+    adminFeedbackBy: string | null;
+    adminFeedbackAt: string | null;
     answeredAt: string;
     question: string | null;
     content: string;
@@ -43,6 +48,21 @@ type Item = {
 
 const agentName = (botId: string) =>
     siteConfig.agents.find(a => a.id === botId)?.name ?? botId;
+
+/**
+ * The thumb to show on an answer carrying two of them.
+ *
+ * A down wins over an up, whoever gave it, because the list exists to surface
+ * what needs looking at. Where the two disagree the row says so rather than
+ * quietly picking a side.
+ */
+const effective = (i: Item): 'up' | 'down' | null =>
+    i.feedback === 'down' || i.adminFeedback === 'down' ? 'down'
+        : i.feedback === 'up' || i.adminFeedback === 'up' ? 'up'
+            : null;
+
+const disagrees = (i: Item) =>
+    !!i.feedback && !!i.adminFeedback && i.feedback !== i.adminFeedback;
 
 /** The label the user actually clicked, from the id that was stored. */
 const reasonLabel = (id: string | null) =>
@@ -65,6 +85,7 @@ export default function RatingsTab() {
     const [fetchedAt, setFetchedAt] = useState<Date | null>(null);
     const [live, setLive] = useState(true);
     const [rating, setRating] = useState<'down' | 'up' | 'all'>('down');
+    const [source, setSource] = useState<'all' | 'user' | 'admin'>('all');
     const [agent, setAgent] = useState('');
     const [showResolved, setShowResolved] = useState(false);
     const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -106,12 +127,20 @@ export default function RatingsTab() {
     const filtered = useMemo(
         () =>
             items.filter(i => {
-                if (rating !== 'all' && i.feedback !== rating) return false;
+                // Whose thumb the rating filter reads depends on the source
+                // filter: picking "From admins" and "Thumbs down" should mean
+                // what an admin marked down, not an answer a user disliked
+                // that an admin happened to also look at.
+                const thumb = source === 'user' ? i.feedback
+                    : source === 'admin' ? i.adminFeedback
+                        : effective(i);
+                if (!thumb) return false;
+                if (rating !== 'all' && thumb !== rating) return false;
                 if (agent && i.botId !== agent) return false;
                 if (!showResolved && i.reviewStatus === 'resolved') return false;
                 return true;
             }),
-        [items, rating, agent, showResolved],
+        [items, rating, source, agent, showResolved],
     );
 
     const selected = filtered.find(i => i.id === selectedId) ?? filtered[0] ?? null;
@@ -125,10 +154,14 @@ export default function RatingsTab() {
         if (note !== (selected.reviewNote ?? '')) setNote(selected.reviewNote ?? '');
     }
 
-    const isNew = (i: Item) =>
-        !!i.feedbackAt && new Date(i.feedbackAt).getTime() > openedAt.current && !seen.current.has(i.id);
+    const isNew = (i: Item) => {
+        const at = i.feedbackAt ?? i.adminFeedbackAt;
+        return !!at && new Date(at).getTime() > openedAt.current && !seen.current.has(i.id);
+    };
 
-    const save = async (patch: { reviewNote?: string; reviewStatus?: string | null }) => {
+    const save = async (patch: {
+        reviewNote?: string; reviewStatus?: string | null; adminFeedback?: 'up' | 'down' | null;
+    }) => {
         if (!selected) return;
         setSaving(true);
         try {
@@ -142,7 +175,15 @@ export default function RatingsTab() {
             setItems(prev =>
                 prev.map(i =>
                     i.id === selected.id
-                        ? { ...i, reviewNote: saved.reviewNote, reviewStatus: saved.reviewStatus, reviewedAt: saved.reviewedAt }
+                        ? {
+                              ...i,
+                              reviewNote: saved.reviewNote,
+                              reviewStatus: saved.reviewStatus,
+                              reviewedAt: saved.reviewedAt,
+                              adminFeedback: saved.adminFeedback,
+                              adminFeedbackBy: saved.adminFeedbackBy,
+                              adminFeedbackAt: saved.adminFeedbackAt,
+                          }
                         : i,
                 ),
             );
@@ -158,7 +199,12 @@ export default function RatingsTab() {
         if (!selected) return;
         const block = [
             `Agent: ${agentName(selected.botId)}`,
-            `Rated: ${selected.feedback === 'down' ? 'thumbs down' : 'thumbs up'} by ${selected.userEmail}`,
+            selected.feedback
+                ? `Rated: thumbs ${selected.feedback} by ${selected.userEmail}`
+                : `Asked by: ${selected.userEmail} (not rated by them)`,
+            selected.adminFeedback
+                ? `Admin rating: thumbs ${selected.adminFeedback} by ${selected.adminFeedbackBy ?? 'an admin'}`
+                : null,
             `Message id: ${selected.id}`,
             selected.reviewNote ? `Note: ${selected.reviewNote}` : null,
             '',
@@ -178,9 +224,10 @@ export default function RatingsTab() {
     };
 
     const counts = useMemo(() => ({
-        openDown: items.filter(i => i.feedback === 'down' && i.reviewStatus !== 'resolved').length,
-        down: items.filter(i => i.feedback === 'down').length,
-        up: items.filter(i => i.feedback === 'up').length,
+        openDown: items.filter(i => effective(i) === 'down' && i.reviewStatus !== 'resolved').length,
+        down: items.filter(i => effective(i) === 'down').length,
+        up: items.filter(i => effective(i) === 'up').length,
+        disagree: items.filter(disagrees).length,
     }), [items]);
 
     return (
@@ -195,10 +242,30 @@ export default function RatingsTab() {
                         <span className="text-red-500">{counts.down} down</span>
                         {' · '}
                         <span className="text-emerald-600">{counts.up} up</span>
+                        {!!counts.disagree && (
+                            <>
+                                {' · '}
+                                <span className="text-amber-600">{counts.disagree} where you and the user disagree</span>
+                            </>
+                        )}
                     </p>
                 </div>
 
                 <div className="flex items-center gap-0.5 rounded-lg bg-slate-100 p-0.5 ml-auto">
+                    {(['all', 'user', 'admin'] as const).map(s => (
+                        <button
+                            key={s}
+                            onClick={() => setSource(s)}
+                            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                                source === s ? 'bg-white shadow-sm text-[#307c4c]' : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                        >
+                            {s === 'all' ? 'Everyone' : s === 'user' ? 'From users' : 'From admins'}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="flex items-center gap-0.5 rounded-lg bg-slate-100 p-0.5">
                     {(['down', 'up', 'all'] as const).map(r => (
                         <button
                             key={r}
@@ -268,7 +335,7 @@ export default function RatingsTab() {
             ) : filtered.length === 0 ? (
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center justify-center py-20 text-slate-400">
                     <Inbox className="w-10 h-10 mb-3 opacity-30" />
-                    <p className="text-sm">Nothing here. Ratings appear as users give them.</p>
+                    <p className="text-sm">Nothing here. Ratings appear as users give them, or as you rate answers yourself.</p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4 items-start">
@@ -285,8 +352,8 @@ export default function RatingsTab() {
                                             on ? 'bg-[#307c4c]/8' : 'hover:bg-slate-50'
                                         }`}
                                     >
-                                        <span className={`mt-0.5 shrink-0 ${i.feedback === 'down' ? 'text-red-400' : 'text-emerald-500'}`}>
-                                            {i.feedback === 'down'
+                                        <span className={`mt-0.5 shrink-0 ${effective(i) === 'down' ? 'text-red-400' : 'text-emerald-500'}`}>
+                                            {effective(i) === 'down'
                                                 ? <ThumbsDown className="w-3.5 h-3.5" fill="currentColor" />
                                                 : <ThumbsUp className="w-3.5 h-3.5" fill="currentColor" />}
                                         </span>
@@ -294,7 +361,17 @@ export default function RatingsTab() {
                                             <span className="flex items-center gap-1.5 text-[11px] text-slate-500 mb-0.5">
                                                 <span className="font-medium text-slate-700 truncate">{agentName(i.botId)}</span>
                                                 <span>·</span>
-                                                <span className="shrink-0">{when(i.feedbackAt)}</span>
+                                                <span className="shrink-0">{when(i.feedbackAt ?? i.adminFeedbackAt)}</span>
+                                                {!i.feedback && i.adminFeedback && (
+                                                    <span className="shrink-0 px-1 rounded bg-slate-100 text-slate-500 text-[9px] font-semibold tracking-wide">
+                                                        ADMIN
+                                                    </span>
+                                                )}
+                                                {disagrees(i) && (
+                                                    <span className="shrink-0 px-1 rounded bg-amber-50 text-amber-600 text-[9px] font-semibold tracking-wide">
+                                                        SPLIT
+                                                    </span>
+                                                )}
                                                 {isNew(i) && (
                                                     <span className="ml-auto shrink-0 px-1.5 rounded-full bg-[#307c4c] text-white text-[9px] font-semibold tracking-wide">
                                                         NEW
@@ -325,15 +402,28 @@ export default function RatingsTab() {
                             <div className="px-5 py-4 border-b border-slate-100 flex items-start justify-between gap-4 shrink-0">
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
-                                        <span className={selected.feedback === 'down' ? 'text-red-500' : 'text-emerald-600'}>
-                                            {selected.feedback === 'down' ? 'Thumbs down' : 'Thumbs up'}
-                                        </span>
-                                        <span>·</span>
+                                        {selected.feedback && (
+                                            <>
+                                                <span className={selected.feedback === 'down' ? 'text-red-500' : 'text-emerald-600'}>
+                                                    {selected.feedback === 'down' ? 'Thumbs down' : 'Thumbs up'} from the user
+                                                </span>
+                                                <span>·</span>
+                                            </>
+                                        )}
+                                        {selected.adminFeedback && (
+                                            <>
+                                                <span className={selected.adminFeedback === 'down' ? 'text-red-500' : 'text-emerald-600'}>
+                                                    {selected.adminFeedback === 'down' ? 'Thumbs down' : 'Thumbs up'} from{' '}
+                                                    {selected.adminFeedbackBy ?? 'an admin'}
+                                                </span>
+                                                <span>·</span>
+                                            </>
+                                        )}
                                         <span className="font-medium text-slate-700">{agentName(selected.botId)}</span>
                                         <span>·</span>
                                         <span className="truncate">{selected.userEmail}</span>
                                         <span>·</span>
-                                        <span>{when(selected.feedbackAt)}</span>
+                                        <span>{when(selected.feedbackAt ?? selected.adminFeedbackAt)}</span>
                                     </div>
                                     <h2 className="font-semibold text-slate-900 text-[15px] leading-snug">
                                         {selected.question ?? '(question not found)'}
@@ -414,6 +504,34 @@ export default function RatingsTab() {
                                         {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
                                         {selected.reviewStatus === 'resolved' ? 'Resolved — undo' : 'Mark resolved'}
                                     </button>
+                                    {/* Your own verdict, kept apart from the user's. Useful
+                                        here as well as on the transcript: this is where you
+                                        are already reading the answer closely. */}
+                                    <div className="flex items-center gap-1.5 border-l border-slate-200 pl-3">
+                                        <span className="text-xs text-slate-400">Your rating</span>
+                                        {(['up', 'down'] as const).map(v => {
+                                            const on = selected.adminFeedback === v;
+                                            const Icon = v === 'up' ? ThumbsUp : ThumbsDown;
+                                            return (
+                                                <button
+                                                    key={v}
+                                                    onClick={() => save({ adminFeedback: on ? null : v })}
+                                                    disabled={saving}
+                                                    aria-pressed={on}
+                                                    title={v === 'up' ? 'Mark this answer good' : 'Flag this answer'}
+                                                    className={`p-1.5 rounded-md border transition-colors disabled:opacity-50 ${
+                                                        on
+                                                            ? v === 'up'
+                                                                ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
+                                                                : 'border-red-200 bg-red-50 text-red-600'
+                                                            : 'border-transparent text-slate-400 hover:text-slate-700 hover:bg-slate-200/60'
+                                                    }`}
+                                                >
+                                                    <Icon size={13} fill={on ? 'currentColor' : 'none'} />
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                     <span className="text-xs text-slate-400">
                                         Notes save when you click away.
                                     </span>

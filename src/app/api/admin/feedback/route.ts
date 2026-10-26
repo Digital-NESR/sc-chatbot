@@ -22,8 +22,13 @@ export async function GET() {
 
     try {
         const rated = await prisma.message.findMany({
-            where: { feedback: { not: null } },
-            orderBy: { feedbackAt: 'desc' },
+            // Either thumb puts an answer in here: the user's, or an admin's
+            // given from the transcript on /admin.
+            where: { OR: [{ feedback: { not: null } }, { adminFeedback: { not: null } }] },
+            // By when the answer was written rather than when it was rated,
+            // because an admin-only rating has no feedbackAt and Postgres
+            // sorts those nulls to the top of a DESC.
+            orderBy: { createdAt: 'desc' },
             take: 300,
             select: {
                 id: true,
@@ -33,6 +38,9 @@ export async function GET() {
                 feedbackAt: true,
                 feedbackReason: true,
                 feedbackNote: true,
+                adminFeedback: true,
+                adminFeedbackBy: true,
+                adminFeedbackAt: true,
                 createdAt: true,
                 reviewNote: true,
                 reviewStatus: true,
@@ -75,6 +83,9 @@ export async function GET() {
             // evidence and the other is our reading of it.
             feedbackReason: m.feedbackReason,
             feedbackNote: m.feedbackNote,
+            adminFeedback: m.adminFeedback,
+            adminFeedbackBy: m.adminFeedbackBy,
+            adminFeedbackAt: m.adminFeedbackAt,
             answeredAt: m.createdAt,
             question: askedBefore(m.sessionId, m.createdAt),
             content: m.content,
@@ -83,20 +94,28 @@ export async function GET() {
             reviewedAt: m.reviewedAt,
         }));
 
-        // Open thumbs-down first: it is the half anyone acts on. Resolved ones
-        // sink, so the top of the list is always the work that is left.
+        // Open thumbs-down first: it is the half anyone acts on. A down from
+        // either side counts, so an answer an admin flagged queues alongside
+        // one a user complained about. Resolved ones sink, so the top of the
+        // list is always the work that is left.
+        const isDown = (i: (typeof items)[number]) =>
+            i.feedback === 'down' || i.adminFeedback === 'down';
+        const ratedAt = (i: (typeof items)[number]) =>
+            Math.max(i.feedbackAt?.getTime() ?? 0, i.adminFeedbackAt?.getTime() ?? 0);
         const rank = (i: (typeof items)[number]) =>
-            i.reviewStatus === 'resolved' ? 2 : i.feedback === 'down' ? 0 : 1;
+            i.reviewStatus === 'resolved' ? 2 : isDown(i) ? 0 : 1;
         items.sort((a, b) => {
             if (rank(a) !== rank(b)) return rank(a) - rank(b);
-            return (b.feedbackAt?.getTime() ?? 0) - (a.feedbackAt?.getTime() ?? 0);
+            return ratedAt(b) - ratedAt(a);
         });
 
         return NextResponse.json({
             items,
             up: items.filter(i => i.feedback === 'up').length,
             down: items.filter(i => i.feedback === 'down').length,
-            openDown: items.filter(i => i.feedback === 'down' && i.reviewStatus !== 'resolved').length,
+            adminUp: items.filter(i => i.adminFeedback === 'up').length,
+            adminDown: items.filter(i => i.adminFeedback === 'down').length,
+            openDown: items.filter(i => isDown(i) && i.reviewStatus !== 'resolved').length,
             fetchedAt: new Date().toISOString(),
         });
     } catch (error) {
@@ -106,21 +125,26 @@ export async function GET() {
 }
 
 /**
- * Triage one rated answer: what was wrong with it, and whether it is done.
+ * Rate or triage one answer, as an admin.
  *
- * Separate from the user's own thumb, which is never overwritten here. The
- * thumb says someone was unhappy; the note says why, and that is the part
- * worth keeping, because by the time anyone looks the conversation that
- * produced it is cold.
+ * Three separate things live on a message and none of them overwrites
+ * another: the user's own thumb, an admin's thumb, and the review note. The
+ * user's thumb says somebody was unhappy, the admin's says whether we agree,
+ * and the note says why - by the time anyone looks, the conversation that
+ * produced it is cold and the note is all that still explains it.
+ *
+ * Only an assistant answer can be rated. Rating a question would store a
+ * verdict on something the product did not write.
  */
 export async function PATCH(request: Request) {
     const session = await getServerSession(authOptions);
-    if (!isAdmin(session?.user?.email)) {
+    const email = session?.user?.email;
+    if (!isAdmin(email)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     try {
-        const { messageId, reviewNote, reviewStatus } = await request.json();
+        const { messageId, reviewNote, reviewStatus, adminFeedback } = await request.json();
 
         if (!messageId || typeof messageId !== 'string') {
             return NextResponse.json({ error: 'Missing messageId' }, { status: 400 });
@@ -128,12 +152,35 @@ export async function PATCH(request: Request) {
         if (reviewStatus !== undefined && reviewStatus !== null && reviewStatus !== 'resolved') {
             return NextResponse.json({ error: 'reviewStatus must be "resolved" or null' }, { status: 400 });
         }
+        if (adminFeedback !== undefined && adminFeedback !== null
+            && adminFeedback !== 'up' && adminFeedback !== 'down') {
+            return NextResponse.json({ error: 'adminFeedback must be "up", "down" or null' }, { status: 400 });
+        }
 
-        const data: { reviewNote?: string | null; reviewStatus?: string | null; reviewedAt?: Date | null } = {};
+        const data: {
+            reviewNote?: string | null; reviewStatus?: string | null; reviewedAt?: Date | null;
+            adminFeedback?: string | null; adminFeedbackBy?: string | null; adminFeedbackAt?: Date | null;
+        } = {};
         if (reviewNote !== undefined) data.reviewNote = reviewNote || null;
         if (reviewStatus !== undefined) {
             data.reviewStatus = reviewStatus;
             data.reviewedAt = reviewStatus ? new Date() : null;
+        }
+        if (adminFeedback !== undefined) {
+            const target = await prisma.message.findUnique({
+                where: { id: messageId },
+                select: { role: true },
+            });
+            if (!target) {
+                return NextResponse.json({ error: 'No such message' }, { status: 404 });
+            }
+            if (target.role !== 'assistant') {
+                return NextResponse.json({ error: 'Only an assistant answer can be rated' }, { status: 400 });
+            }
+            data.adminFeedback = adminFeedback;
+            // Cleared together, so a withdrawn rating leaves no stale author.
+            data.adminFeedbackBy = adminFeedback ? email ?? null : null;
+            data.adminFeedbackAt = adminFeedback ? new Date() : null;
         }
         if (Object.keys(data).length === 0) {
             return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
@@ -142,7 +189,10 @@ export async function PATCH(request: Request) {
         const updated = await prisma.message.update({
             where: { id: messageId },
             data,
-            select: { id: true, reviewNote: true, reviewStatus: true, reviewedAt: true },
+            select: {
+                id: true, reviewNote: true, reviewStatus: true, reviewedAt: true,
+                adminFeedback: true, adminFeedbackBy: true, adminFeedbackAt: true,
+            },
         });
 
         return NextResponse.json({ success: true, ...updated });
