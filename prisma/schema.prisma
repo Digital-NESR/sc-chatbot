@@ -64,9 +64,16 @@ model Message {
   // them, and where the two do disagree that disagreement is the signal worth
   // keeping. adminFeedbackBy is the admin's email, so a queue of flagged
   // answers can say who flagged each one.
-  adminFeedback   String?
-  adminFeedbackBy String?
-  adminFeedbackAt DateTime?
+  //
+  // The reason and note mirror the user's pair above rather than reusing
+  // reviewNote below: that one is the conclusion reached afterwards, often by
+  // somebody else, and a quick flag written from a transcript must not
+  // overwrite it.
+  adminFeedback       String?
+  adminFeedbackBy     String?
+  adminFeedbackAt     DateTime?
+  adminFeedbackReason String?
+  adminFeedbackNote   String?   @db.Text
 
   // Triage, written from /admin/feedback rather than by the user. The note is
   // what was actually wrong with the answer, which the thumb on its own never

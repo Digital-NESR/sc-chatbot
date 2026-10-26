@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { prisma } from '@/lib/prisma';
 import { isAdmin } from '@/lib/admin';
+import { siteConfig } from '@/config/site';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,6 +42,8 @@ export async function GET() {
                 adminFeedback: true,
                 adminFeedbackBy: true,
                 adminFeedbackAt: true,
+                adminFeedbackReason: true,
+                adminFeedbackNote: true,
                 createdAt: true,
                 reviewNote: true,
                 reviewStatus: true,
@@ -86,6 +89,8 @@ export async function GET() {
             adminFeedback: m.adminFeedback,
             adminFeedbackBy: m.adminFeedbackBy,
             adminFeedbackAt: m.adminFeedbackAt,
+            adminFeedbackReason: m.adminFeedbackReason,
+            adminFeedbackNote: m.adminFeedbackNote,
             answeredAt: m.createdAt,
             question: askedBefore(m.sessionId, m.createdAt),
             content: m.content,
@@ -144,7 +149,10 @@ export async function PATCH(request: Request) {
     }
 
     try {
-        const { messageId, reviewNote, reviewStatus, adminFeedback } = await request.json();
+        const {
+            messageId, reviewNote, reviewStatus,
+            adminFeedback, adminFeedbackReason, adminFeedbackNote,
+        } = await request.json();
 
         if (!messageId || typeof messageId !== 'string') {
             return NextResponse.json({ error: 'Missing messageId' }, { status: 400 });
@@ -157,9 +165,16 @@ export async function PATCH(request: Request) {
             return NextResponse.json({ error: 'adminFeedback must be "up", "down" or null' }, { status: 400 });
         }
 
+        const reasonIds = siteConfig.text.feedback.reasons.map(r => r.id);
+        if (adminFeedbackReason !== undefined && adminFeedbackReason !== null
+            && !reasonIds.includes(adminFeedbackReason)) {
+            return NextResponse.json({ error: 'Unknown adminFeedbackReason' }, { status: 400 });
+        }
+
         const data: {
             reviewNote?: string | null; reviewStatus?: string | null; reviewedAt?: Date | null;
             adminFeedback?: string | null; adminFeedbackBy?: string | null; adminFeedbackAt?: Date | null;
+            adminFeedbackReason?: string | null; adminFeedbackNote?: string | null;
         } = {};
         if (reviewNote !== undefined) data.reviewNote = reviewNote || null;
         if (reviewStatus !== undefined) {
@@ -178,10 +193,19 @@ export async function PATCH(request: Request) {
                 return NextResponse.json({ error: 'Only an assistant answer can be rated' }, { status: 400 });
             }
             data.adminFeedback = adminFeedback;
-            // Cleared together, so a withdrawn rating leaves no stale author.
+            // Cleared together, so a withdrawn rating leaves no stale author,
+            // and no reason hanging off a thumb that is no longer there.
             data.adminFeedbackBy = adminFeedback ? email ?? null : null;
             data.adminFeedbackAt = adminFeedback ? new Date() : null;
+            if (!adminFeedback) {
+                data.adminFeedbackReason = null;
+                data.adminFeedbackNote = null;
+            }
         }
+        // Settable on their own, so picking a reason later does not re-stamp
+        // the rating's time or move it to whoever happened to add the detail.
+        if (adminFeedbackReason !== undefined) data.adminFeedbackReason = adminFeedbackReason || null;
+        if (adminFeedbackNote !== undefined) data.adminFeedbackNote = adminFeedbackNote || null;
         if (Object.keys(data).length === 0) {
             return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
         }
@@ -192,6 +216,7 @@ export async function PATCH(request: Request) {
             select: {
                 id: true, reviewNote: true, reviewStatus: true, reviewedAt: true,
                 adminFeedback: true, adminFeedbackBy: true, adminFeedbackAt: true,
+                adminFeedbackReason: true, adminFeedbackNote: true,
             },
         });
 

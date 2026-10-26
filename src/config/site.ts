@@ -254,12 +254,16 @@ export const siteConfig = {
             dismiss: 'Skip - your rating is already saved',
             thanks: 'Thanks - noted.',
             notePlaceholder: 'In a few words...',
+            // adminLabel is the same reason said about somebody else's
+            // conversation, for the admin pages. Same ids, so a reason an
+            // admin picked and one a user picked are the same thing when
+            // anyone counts them.
             reasons: [
-                { id: 'wrong-number', label: 'Wrong number' },
-                { id: 'missing-rows', label: 'Missing rows' },
-                { id: 'misread', label: 'Misread my question' },
-                { id: 'too-slow', label: 'Too slow' },
-                { id: 'other', label: 'Something else' },
+                { id: 'wrong-number', label: 'Wrong number', adminLabel: 'Wrong number' },
+                { id: 'missing-rows', label: 'Missing rows', adminLabel: 'Missing rows' },
+                { id: 'misread', label: 'Misread my question', adminLabel: 'Misread the question' },
+                { id: 'too-slow', label: 'Too slow', adminLabel: 'Too slow' },
+                { id: 'other', label: 'Something else', adminLabel: 'Something else' },
             ],
         },
 

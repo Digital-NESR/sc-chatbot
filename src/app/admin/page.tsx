@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { ChevronRight, ArrowLeft, Loader2, User, MessageSquare, Users, Activity, BarChart2, ThumbsDown, ThumbsUp, Search, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -59,72 +59,157 @@ function FeedbackMark({ msg }: {
  *
  * Saves on click, optimistically - a rating that waits on a spinner is a
  * rating nobody gives. If the save fails the thumb goes back and says so.
+ *
+ * A thumbs-down then offers the same reasons the user is offered in the chat,
+ * plus a free-text note, and both are optional: the thumb is already written
+ * by the time they appear, so walking away leaves the rating exactly as it is.
  */
+type AdminRated = {
+    id: string;
+    adminFeedback?: string | null;
+    adminFeedbackBy?: string | null;
+    adminFeedbackReason?: string | null;
+    adminFeedbackNote?: string | null;
+};
+
 function AdminRating({ msg, onChange }: {
-    msg: { id: string; adminFeedback?: string | null; adminFeedbackBy?: string | null };
-    onChange: (id: string, value: string | null) => void;
+    msg: AdminRated;
+    onChange: (id: string, patch: Partial<AdminRated>) => void;
 }) {
     const [saving, setSaving] = useState(false);
     const [failed, setFailed] = useState(false);
+    const [note, setNote] = useState(msg.adminFeedbackNote ?? '');
     const current = msg.adminFeedback ?? null;
+    const reason = msg.adminFeedbackReason ?? null;
 
-    const set = async (value: 'up' | 'down') => {
-        const next = current === value ? null : value;
-        const previous = current;
+    // The draft follows the message, so scrolling between answers never
+    // carries one answer's half-typed note onto another.
+    const noteFor = useRef<string | null>(null);
+    if (noteFor.current !== msg.id) {
+        noteFor.current = msg.id;
+        if (note !== (msg.adminFeedbackNote ?? '')) setNote(msg.adminFeedbackNote ?? '');
+    }
+
+    const save = async (patch: Partial<AdminRated>) => {
+        const previous = {
+            adminFeedback: current,
+            adminFeedbackReason: reason,
+            adminFeedbackNote: msg.adminFeedbackNote ?? null,
+        };
         setFailed(false);
         setSaving(true);
-        onChange(msg.id, next);
+        onChange(msg.id, patch);
         try {
             const res = await fetch('/api/admin/feedback', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ messageId: msg.id, adminFeedback: next }),
+                body: JSON.stringify({ messageId: msg.id, ...patch }),
             });
             if (!res.ok) throw new Error(await res.text());
+            const saved = await res.json();
+            onChange(msg.id, {
+                adminFeedback: saved.adminFeedback,
+                adminFeedbackBy: saved.adminFeedbackBy,
+                adminFeedbackReason: saved.adminFeedbackReason,
+                adminFeedbackNote: saved.adminFeedbackNote,
+            });
         } catch (err) {
             console.error(err);
             onChange(msg.id, previous);
+            setNote(previous.adminFeedbackNote ?? '');
             setFailed(true);
         } finally {
             setSaving(false);
         }
     };
 
-    const btn = (value: 'up' | 'down', Icon: typeof ThumbsUp, on: string) =>
+    const setThumb = (value: 'up' | 'down') =>
+        save({ adminFeedback: current === value ? null : value });
+
+    const btn = (value: 'up' | 'down', on: string) =>
         `p-1.5 rounded-md border transition-colors disabled:opacity-50 ${
             current === value ? on : 'border-transparent text-slate-400 hover:text-slate-700 hover:bg-slate-100'
         }`;
 
     return (
-        <div className="flex items-center gap-1.5 text-xs">
-            <span className="text-slate-400 mr-0.5">Your rating</span>
-            <button
-                onClick={() => set('up')}
-                disabled={saving}
-                aria-pressed={current === 'up'}
-                title="Mark this answer good"
-                className={btn('up', ThumbsUp, 'border-emerald-200 bg-emerald-50 text-emerald-600')}
-            >
-                <ThumbsUp className="w-3.5 h-3.5" fill={current === 'up' ? 'currentColor' : 'none'} />
-            </button>
-            <button
-                onClick={() => set('down')}
-                disabled={saving}
-                aria-pressed={current === 'down'}
-                title="Flag this answer for review"
-                className={btn('down', ThumbsDown, 'border-red-200 bg-red-50 text-red-600')}
-            >
-                <ThumbsDown className="w-3.5 h-3.5" fill={current === 'down' ? 'currentColor' : 'none'} />
-            </button>
-            {saving && <Loader2 className="w-3 h-3 animate-spin text-slate-400" />}
-            {failed && <span className="text-red-500">Not saved — try again</span>}
-            {!failed && current === 'down' && (
-                <span className="text-slate-400">Queued on the Feedback page</span>
-            )}
-            {!failed && msg.adminFeedbackBy && (
-                <span className="text-slate-300 truncate" title={msg.adminFeedbackBy}>
-                    · {msg.adminFeedbackBy}
-                </span>
+        <div className="text-xs">
+            <div className="flex items-center gap-1.5">
+                <span className="text-slate-400 mr-0.5">Your rating</span>
+                <button
+                    onClick={() => setThumb('up')}
+                    disabled={saving}
+                    aria-pressed={current === 'up'}
+                    title="Mark this answer good"
+                    className={btn('up', 'border-emerald-200 bg-emerald-50 text-emerald-600')}
+                >
+                    <ThumbsUp className="w-3.5 h-3.5" fill={current === 'up' ? 'currentColor' : 'none'} />
+                </button>
+                <button
+                    onClick={() => setThumb('down')}
+                    disabled={saving}
+                    aria-pressed={current === 'down'}
+                    title="Flag this answer for review"
+                    className={btn('down', 'border-red-200 bg-red-50 text-red-600')}
+                >
+                    <ThumbsDown className="w-3.5 h-3.5" fill={current === 'down' ? 'currentColor' : 'none'} />
+                </button>
+                {saving && <Loader2 className="w-3 h-3 animate-spin text-slate-400" />}
+                {failed && <span className="text-red-500">Not saved — try again</span>}
+                {!failed && current === 'down' && (
+                    <span className="text-slate-400">Queued on the Feedback page</span>
+                )}
+                {!failed && msg.adminFeedbackBy && (
+                    <span className="text-slate-300 truncate" title={msg.adminFeedbackBy}>
+                        · {msg.adminFeedbackBy}
+                    </span>
+                )}
+            </div>
+
+            {current === 'down' && (
+                <div className="mt-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10.5px] text-slate-400 mr-auto">
+                            {siteConfig.text.feedback.prompt}{' '}
+                            <span className="text-slate-300">({siteConfig.text.feedback.optional})</span>
+                        </span>
+                        {siteConfig.text.feedback.reasons.map(r => (
+                            <button
+                                key={r.id}
+                                onClick={() => save({ adminFeedbackReason: reason === r.id ? null : r.id })}
+                                disabled={saving}
+                                aria-pressed={reason === r.id}
+                                className={`px-2 py-0.5 rounded-full border text-[10.5px] transition-colors disabled:opacity-50 ${
+                                    reason === r.id
+                                        ? 'border-red-200 bg-red-50 text-red-500'
+                                        : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                                }`}
+                            >
+                                {r.adminLabel}
+                            </button>
+                        ))}
+                    </div>
+                    {/* Always offered, not only under "Something else": a chip
+                        says which kind of wrong, the note says what was wrong,
+                        and by the time anyone reads this the conversation that
+                        produced it is cold. */}
+                    <input
+                        value={note}
+                        onChange={e => setNote(e.target.value)}
+                        onBlur={() => {
+                            if (note !== (msg.adminFeedbackNote ?? '')) save({ adminFeedbackNote: note });
+                        }}
+                        onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                e.currentTarget.blur();
+                            }
+                        }}
+                        placeholder="What was wrong with it? (optional)"
+                        className="mt-1.5 w-full px-2 py-1 rounded-md border border-slate-200 bg-white
+                                   text-[11.5px] text-slate-600 placeholder-slate-300
+                                   focus:outline-none focus:border-slate-300"
+                    />
+                </div>
             )}
         </div>
     );
@@ -273,8 +358,8 @@ export default function AdminDashboard() {
 
     // Written back into the loaded transcript so the thumb stays set while you
     // keep reading, without refetching the whole conversation per click.
-    const setAdminRating = useCallback((id: string, value: string | null) => {
-        setMessages(prev => prev.map(m => (m.id === id ? { ...m, adminFeedback: value } : m)));
+    const setAdminRating = useCallback((id: string, patch: Record<string, unknown>) => {
+        setMessages(prev => prev.map(m => (m.id === id ? { ...m, ...patch } : m)));
     }, []);
 
     // --- Derived UI State (ALL HOOKS MUST BE ABOVE EARLY RETURNS) ---

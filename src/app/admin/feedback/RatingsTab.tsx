@@ -38,6 +38,8 @@ type Item = {
     adminFeedback: 'up' | 'down' | null;
     adminFeedbackBy: string | null;
     adminFeedbackAt: string | null;
+    adminFeedbackReason: string | null;
+    adminFeedbackNote: string | null;
     answeredAt: string;
     question: string | null;
     content: string;
@@ -67,6 +69,10 @@ const disagrees = (i: Item) =>
 /** The label the user actually clicked, from the id that was stored. */
 const reasonLabel = (id: string | null) =>
     id ? siteConfig.text.feedback.reasons.find(r => r.id === id)?.label ?? id : null;
+
+/** The same reason ids, worded for somebody reviewing another person's chat. */
+const adminReasonLabel = (id: string | null) =>
+    id ? siteConfig.text.feedback.reasons.find(r => r.id === id)?.adminLabel ?? id : null;
 
 const when = (iso: string | null) => {
     if (!iso) return '';
@@ -161,6 +167,7 @@ export default function RatingsTab() {
 
     const save = async (patch: {
         reviewNote?: string; reviewStatus?: string | null; adminFeedback?: 'up' | 'down' | null;
+        adminFeedbackReason?: string | null; adminFeedbackNote?: string | null;
     }) => {
         if (!selected) return;
         setSaving(true);
@@ -183,6 +190,8 @@ export default function RatingsTab() {
                               adminFeedback: saved.adminFeedback,
                               adminFeedbackBy: saved.adminFeedbackBy,
                               adminFeedbackAt: saved.adminFeedbackAt,
+                              adminFeedbackReason: saved.adminFeedbackReason,
+                              adminFeedbackNote: saved.adminFeedbackNote,
                           }
                         : i,
                 ),
@@ -204,6 +213,8 @@ export default function RatingsTab() {
                 : `Asked by: ${selected.userEmail} (not rated by them)`,
             selected.adminFeedback
                 ? `Admin rating: thumbs ${selected.adminFeedback} by ${selected.adminFeedbackBy ?? 'an admin'}`
+                  + (selected.adminFeedbackReason ? ` — ${adminReasonLabel(selected.adminFeedbackReason)}` : '')
+                  + (selected.adminFeedbackNote ? ` (${selected.adminFeedbackNote})` : '')
                 : null,
             `Message id: ${selected.id}`,
             selected.reviewNote ? `Note: ${selected.reviewNote}` : null,
@@ -384,9 +395,11 @@ export default function RatingsTab() {
                                             <span className="block text-[13px] text-slate-800 line-clamp-2">
                                                 {i.question ?? '(question not found)'}
                                             </span>
-                                            {i.feedbackReason && (
+                                            {(i.feedbackReason || i.adminFeedbackReason) && (
                                                 <span className="inline-block mt-1 px-1.5 py-0.5 rounded-full bg-red-50 text-red-500 text-[9.5px] font-medium">
-                                                    {reasonLabel(i.feedbackReason)}
+                                                    {i.feedbackReason
+                                                        ? reasonLabel(i.feedbackReason)
+                                                        : adminReasonLabel(i.adminFeedbackReason)}
                                                 </span>
                                             )}
                                         </span>
@@ -430,11 +443,25 @@ export default function RatingsTab() {
                                     </h2>
                                     {selected.feedbackReason && (
                                         <p className="mt-1.5 text-[12px] text-slate-600">
+                                            <span className="text-slate-400 mr-1.5">User:</span>
                                             <span className="px-1.5 py-0.5 rounded-full bg-red-50 text-red-500 text-[10.5px] font-medium">
                                                 {reasonLabel(selected.feedbackReason)}
                                             </span>
                                             {selected.feedbackNote && (
                                                 <span className="ml-2 italic">{selected.feedbackNote}</span>
+                                            )}
+                                        </p>
+                                    )}
+                                    {(selected.adminFeedbackReason || selected.adminFeedbackNote) && (
+                                        <p className="mt-1.5 text-[12px] text-slate-600">
+                                            <span className="text-slate-400 mr-1.5">Admin:</span>
+                                            {selected.adminFeedbackReason && (
+                                                <span className="px-1.5 py-0.5 rounded-full bg-red-50 text-red-500 text-[10.5px] font-medium">
+                                                    {adminReasonLabel(selected.adminFeedbackReason)}
+                                                </span>
+                                            )}
+                                            {selected.adminFeedbackNote && (
+                                                <span className="ml-2 italic">{selected.adminFeedbackNote}</span>
                                             )}
                                         </p>
                                     )}
@@ -536,6 +563,36 @@ export default function RatingsTab() {
                                         Notes save when you click away.
                                     </span>
                                 </div>
+
+                                {/* Why you marked it down, in the same words the
+                                    transcript offers. Separate from the note above,
+                                    which is the conclusion after looking into it. */}
+                                {selected.adminFeedback === 'down' && (
+                                    <div className="flex flex-wrap items-center gap-1.5 mt-2.5 pt-2.5 border-t border-slate-200">
+                                        <span className="text-[10.5px] text-slate-400 mr-auto">
+                                            {siteConfig.text.feedback.prompt}{' '}
+                                            <span className="text-slate-300">({siteConfig.text.feedback.optional})</span>
+                                        </span>
+                                        {siteConfig.text.feedback.reasons.map(r => {
+                                            const on = selected.adminFeedbackReason === r.id;
+                                            return (
+                                                <button
+                                                    key={r.id}
+                                                    onClick={() => save({ adminFeedbackReason: on ? null : r.id })}
+                                                    disabled={saving}
+                                                    aria-pressed={on}
+                                                    className={`px-2 py-0.5 rounded-full border text-[10.5px] transition-colors disabled:opacity-50 ${
+                                                        on
+                                                            ? 'border-red-200 bg-red-50 text-red-500'
+                                                            : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                                                    }`}
+                                                >
+                                                    {r.adminLabel}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
