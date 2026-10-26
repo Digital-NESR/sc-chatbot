@@ -18,6 +18,8 @@
  * design.
  */
 
+import { siteConfig } from '@/config/site';
+
 /** What every agent is told to end its answer with. */
 export const DERIVATION_MARKER = '**How I got this:**';
 
@@ -44,6 +46,19 @@ export const FOLLOW_UP_MARKER = '**Ask next:**';
  */
 export const ASKING_MARKER = '**Asking:**';
 
+/**
+ * Who can appear after the marker.
+ *
+ * Taken from the agent list rather than written out, so a renamed specialist
+ * cannot leave this behind - the orchestrator's prompt names the same four.
+ * Longest first, so "SC Policy AI" is never matched as a prefix of a longer
+ * name that happens to start the same way.
+ */
+const SPECIALIST_NAMES = siteConfig.agents
+    .filter(a => a.id !== 'orchestrator')
+    .map(a => a.name)
+    .sort((a, b) => b.length - a.length);
+
 /** Long enough and it stops being a chip and starts being a paragraph. */
 const MAX_FOLLOW_UP = 90;
 
@@ -68,19 +83,51 @@ export function splitAsking(content: string): { body: string; asking: string[] }
     while (first < lines.length && !lines[first].trim()) first++;
 
     const line = lines[first]?.trimStart() ?? '';
+
+    /* The marker is still arriving. Half of it is not an answer, and showing
+       it opens a bubble containing "**Asking" with a cursor after it, three
+       seconds before there is anything to read. */
+    if (line.length > 0 && lines.length === first + 1 && ASKING_MARKER.startsWith(line)) {
+        return { body: '', asking: [] };
+    }
+
     if (!line.startsWith(ASKING_MARKER)) return { body: content, asking: [] };
 
-    const named = line
-        .slice(ASKING_MARKER.length)
-        .split(',')
-        .map(name => name.trim())
-        .filter(Boolean);
+    /* Read the names off the front, from the set that exists, rather than
+       splitting the rest of the line on commas.
+
+       The orchestrator is told to put nothing else on this line and it does it
+       anyway - every orchestrated answer in the database runs the answer
+       straight on after the last name with no newline:
+
+         **Asking:** Track My Request**There are 722 purchase orders (2,233 ...
+
+       Splitting that on commas made three specialists out of the answer's own
+       punctuation, and then took the headline sentence to be part of the line
+       and dropped it. The reader lost the sentence that answered the question
+       and never knew. Matching known names stops at the last real one and
+       hands back everything after it as the answer. */
+    let rest = line.slice(ASKING_MARKER.length);
+    const named: string[] = [];
+    for (;;) {
+        const ahead = rest.replace(/^[\s,]+/, '');
+        const hit = SPECIALIST_NAMES.find(
+            name => ahead.slice(0, name.length).toLowerCase() === name.toLowerCase(),
+        );
+        if (!hit) break;
+        named.push(hit);
+        rest = ahead.slice(hit.length);
+    }
 
     // A marker with nobody after it is worth less than no marker: it would
     // leave the progress line saying "Asking" and nothing else.
     if (!named.length) return { body: content, asking: [] };
 
-    return { body: lines.slice(first + 1).join('\n').trimStart(), asking: named };
+    const tail = rest.replace(/^[\s,]+/, '');
+    return {
+        body: [tail, ...lines.slice(first + 1)].join('\n').trim(),
+        asking: named,
+    };
 }
 
 export interface SplitAnswer {
