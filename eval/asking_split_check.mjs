@@ -16,6 +16,21 @@ const ASKING_MARKER = '**Asking:**';
 const SPECIALIST_NAMES = ['Track My Request', 'SourceGuide AI', 'SC Policy AI', 'Material AI'];
 
 function splitAsking(content) {
+  let body = content;
+  const asking = [];
+  for (let pass = 0; pass < 3; pass++) {
+    const step = splitAskingOnce(body);
+    if (!step.asking.length) {
+      if (step.body === '' && body !== '') return { body: '', asking };
+      break;
+    }
+    body = step.body;
+    for (const name of step.asking) if (!asking.includes(name)) asking.push(name);
+  }
+  return { body, asking };
+}
+
+function splitAskingOnce(content) {
   const lines = content.split('\n');
   let first = 0;
   while (first < lines.length && !lines[first].trim()) first++;
@@ -67,6 +82,15 @@ const cases = [
   ['properly formatted', '**Asking:** Track My Request\n\nThere are 722 purchase orders.', {
     asking: ['Track My Request'],
     body: 'There are 722 purchase orders.',
+  }],
+  // Verbatim from the orchestrator, 26 Oct, after the newline rule was added.
+  ['written twice', '**Asking:** Track My Request**Asking:** Track My Request\n\nThe total value is $198.2m.', {
+    asking: ['Track My Request'],
+    body: 'The total value is $198.2m.',
+  }],
+  ['written twice, two names', '**Asking:** Material AI**Asking:** Material AI, SourceGuide AI\n\nBoth agree.', {
+    asking: ['Material AI', 'SourceGuide AI'],
+    body: 'Both agree.',
   }],
   ['no marker at all', 'There are 722 purchase orders.', {
     asking: [], body: 'There are 722 purchase orders.',

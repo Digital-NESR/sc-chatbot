@@ -78,6 +78,28 @@ const MAX_FOLLOW_UPS = 3;
  * instead of showing a bubble with one bold line in it.
  */
 export function splitAsking(content: string): { body: string; asking: string[] } {
+    /* Repeatedly, because the orchestrator sometimes writes the line twice:
+       `**Asking:** Track My Request**Asking:** Track My Request`. One pass
+       strips the first and hands back the second as the opening line of the
+       answer, where it renders as literal asterisks at the top of the bubble.
+       Three passes is well past anything observed and still terminates. */
+    let body = content;
+    const asking: string[] = [];
+    for (let pass = 0; pass < 3; pass++) {
+        const step = splitAskingOnce(body);
+        if (!step.asking.length) {
+            // The marker is still arriving: nothing to show, whatever we found
+            // on an earlier pass.
+            if (step.body === '' && body !== '') return { body: '', asking };
+            break;
+        }
+        body = step.body;
+        for (const name of step.asking) if (!asking.includes(name)) asking.push(name);
+    }
+    return { body, asking };
+}
+
+function splitAskingOnce(content: string): { body: string; asking: string[] } {
     const lines = content.split('\n');
     let first = 0;
     while (first < lines.length && !lines[first].trim()) first++;
