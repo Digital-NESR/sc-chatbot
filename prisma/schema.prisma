@@ -77,6 +77,22 @@ model Message {
 }
 
 /**
+ * What a table, view, tool or column is called in front of a user.
+ *
+ * Only the edits. The defaults live in src/config/dataNames.ts and are layered
+ * under whatever is here, so a row exists only where somebody changed the
+ * wording - which makes "restore the default" a delete rather than a lookup,
+ * and means a new default ships without having to migrate anything.
+ */
+model DisplayName {
+  // The real name, exactly as the agents write it: core.supplychain.
+  key       String   @id
+  label     String
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+}
+
+/**
  * Why an answer never arrived.
  *
  * The user always sees the same line - the chatbot is busy, try again - which

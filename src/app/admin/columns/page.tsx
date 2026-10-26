@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Loader2, Search, Check, AlertCircle, Database, Table2 } from 'lucide-react';
+import { Loader2, Search, Check, AlertCircle, Database, Table2, Tags } from 'lucide-react';
+import DisplayNamesTab from './DisplayNamesTab';
 
 type Column = { name: string; type: string; description: string };
 type TableInfo = { name: string; schema: string; note: string; columns: Column[] };
@@ -13,6 +14,9 @@ function marker(description: string): 'unused' | 'unverified' | null {
     if (/UNVERIFIED/.test(description)) return 'unverified';
     return null;
 }
+
+/* Not one of the databases - see the button for why it sits apart. */
+const NAMES_TAB = '__names__';
 
 export default function ColumnDictionary() {
     const [source, setSource] = useState<string>('materials');
@@ -151,13 +155,34 @@ export default function ColumnDictionary() {
                             {s.label}
                         </button>
                     ))}
-                    {database && (
+                    {database && source !== NAMES_TAB && (
                         <code className="text-[11px] text-slate-400 ml-1">{database}</code>
                     )}
+
+                    {/* Not a database, which is why it sits apart. The others
+                        say what a column MEANS to the agent; this one says
+                        what it is CALLED in front of a user. Same job from
+                        two ends, and usually the same person editing. */}
+                    <span className="ml-auto flex items-center gap-2">
+                        <span className="text-slate-200">|</span>
+                        <button
+                            onClick={() => setSource(NAMES_TAB)}
+                            className={`px-3 py-1.5 rounded-md text-sm transition-colors flex items-center gap-1.5 ${
+                                source === NAMES_TAB
+                                    ? 'bg-[#307c4c] text-white font-medium'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            }`}
+                        >
+                            <Tags className="w-3.5 h-3.5" />
+                            Display Names
+                        </button>
+                    </span>
                 </div>
             </div>
 
-            {loading ? (
+            {source === NAMES_TAB ? (
+                <DisplayNamesTab />
+            ) : loading ? (
                 <div className="flex items-center justify-center py-24 text-slate-500">
                     <Loader2 className="w-5 h-5 animate-spin mr-2" />
                     Loading column dictionary…

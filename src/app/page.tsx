@@ -18,7 +18,7 @@ import remarkGfm from 'remark-gfm';
 import { siteConfig, agentEndpoint, type AgentId } from '@/config/site';
 import { parseMarkdownTables, splitByTables, normalizeAnswerMarkdown } from '@/lib/markdownTable';
 import { splitAnswer, splitAsking } from '@/lib/derivation';
-import { applyDisplayNames } from '@/config/dataNames';
+import { applyDisplayNames, setDisplayNames } from '@/config/dataNames';
 import { exportTablesToXlsx, tablesToTsv, safeFileName } from '@/lib/exportTables';
 import { readChatStream, RETRYABLE, type ChatFailure, type ChatPhase } from '@/lib/chatStream';
 
@@ -1349,6 +1349,26 @@ export default function Home() {
   const [profileOpen, setProfileOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
+
+  /* The wording for table and tool names, where somebody has changed it.
+     Once per session: it is a handful of rows that change about never, and
+     the defaults in the bundle are already correct until they do. A failure
+     here is silent on purpose - the defaults are what would have been used
+     anyway. */
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/display-names')
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (cancelled || !data?.names) return;
+        setDisplayNames(data.names);
+        // Nothing re-renders by itself when a module-level table changes, and
+        // an answer already on screen was rendered with the old wording.
+        setMessages(prev => [...prev]);
+      })
+      .catch(() => { /* defaults stand */ });
+    return () => { cancelled = true; };
+  }, []);
 
   // Read after mount rather than in the initial state, so the server-rendered
   // markup and the first client render agree about where the sidebar is.
