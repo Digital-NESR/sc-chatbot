@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { ChevronRight, ArrowLeft, Loader2, User, MessageSquare, Users, Activity, BarChart2, ThumbsDown } from 'lucide-react';
+import { ChevronRight, ArrowLeft, Loader2, User, MessageSquare, Users, Activity, BarChart2, ThumbsDown, ThumbsUp } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { siteConfig } from '@/config/site';
@@ -14,6 +14,42 @@ const getAgentName = (botId: string) => {
     const agent = siteConfig.agents.find(a => a.id === botId);
     return agent ? agent.name : botId;
 };
+
+const reasonLabel = (id?: string | null) =>
+    id ? siteConfig.text.feedback.reasons.find(r => r.id === id)?.label ?? id : null;
+
+/**
+ * What the user thought of this answer, shown with the answer itself.
+ *
+ * The rating has always been stored on the message; it was only ever read on
+ * /admin/feedback, which shows the rated answers out of their conversation.
+ * Reading a transcript is exactly when the thumb matters, so it belongs here
+ * too - and a thumbs up is worth seeing, not just the complaints.
+ */
+function FeedbackMark({ msg }: {
+    msg: { feedback?: string | null; feedbackReason?: string | null; feedbackNote?: string | null };
+}) {
+    if (msg.feedback !== 'up' && msg.feedback !== 'down') return null;
+    const up = msg.feedback === 'up';
+    const reason = reasonLabel(msg.feedbackReason);
+    return (
+        <div
+            className={`mt-3 pt-2 border-t flex items-start gap-2 text-xs ${
+                up ? 'border-emerald-100 text-emerald-700' : 'border-amber-100 text-amber-700'
+            }`}
+        >
+            {up ? <ThumbsUp className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                : <ThumbsDown className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
+            <div className="min-w-0">
+                <span className="font-medium">{up ? 'Rated helpful' : 'Rated unhelpful'}</span>
+                {reason && <span> · {reason}</span>}
+                {msg.feedbackNote && (
+                    <p className="mt-0.5 italic text-slate-600 break-words">“{msg.feedbackNote}”</p>
+                )}
+            </div>
+        </div>
+    );
+}
 
 export default function AdminDashboard() {
     const [users, setUsers] = useState<any[]>([]);
@@ -297,6 +333,7 @@ export default function AdminDashboard() {
                                                     {msg.content}
                                                 </ReactMarkdown>
                                             </div>
+                                            {!isUser && <FeedbackMark msg={msg} />}
                                         </div>
                                     </div>
                                 );
