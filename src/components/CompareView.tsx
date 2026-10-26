@@ -186,11 +186,17 @@ export default function CompareView({
                 ))}
             </div>
 
-            <p className="text-[10.5px] text-slate-400 px-3 pt-2">
-                Bars are scaled against the largest value in each row. Marks show which card holds the
-                highest value, or the lowest on a price, cost, lead time or age. That is a fact about
-                these rows, not a recommendation.
-            </p>
+            {/* Only when there is something scaled to explain. A table of
+                emails and statuses draws no bars and marks no winner, and a
+                caption describing both makes the reader hunt for marks that
+                are not there. */}
+            {maxima.size > 0 && (
+                <p className="text-[10.5px] text-slate-400 px-3 pt-2">
+                    Bars are scaled against the largest value in each row. Marks show which card holds the
+                    highest value, or the lowest on a price, cost, lead time or age. That is a fact about
+                    these rows, not a recommendation.
+                </p>
+            )}
         </div>
     );
 }

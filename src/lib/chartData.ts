@@ -294,6 +294,18 @@ export type TableAnalysis = ChartableTable | UnchartableTable;
 const MAX_PLOTTED = 15;
 const MAX_ROWS = 200;
 
+/** Below this there is nothing to compare against anything. */
+const MIN_COMPARE_ROWS = 2;
+
+/**
+ * Below this there is nothing worth drawing.
+ *
+ * Two bars side by side is a worse version of the two numbers themselves, and
+ * a line through two points is just a line. The cards still work at two, which
+ * is why this is separate from MIN_COMPARE_ROWS.
+ */
+export const MIN_PLOT_ROWS = 3;
+
 /**
  * Which measures can honestly share one y-axis with the first one.
  *
@@ -337,7 +349,14 @@ export function analyzeTable(table: MarkdownTable): TableAnalysis {
     const rows = table.rows.filter(r => !isTotalsRow(r));
     const droppedTotals = table.rows.length - rows.length;
 
-    if (rows.length < 3) return { chartable: false, reason: `only ${rows.length} rows of data` };
+    /* Two rows is the most natural comparison there is - these two suppliers,
+       these two plants - and refusing it here meant the side-by-side cards
+       could never be offered for one, because this guard ran before the test
+       that allows it. Charting two rows is still refused, but that is decided
+       further down where the views are chosen, not here. */
+    if (rows.length < MIN_COMPARE_ROWS) {
+        return { chartable: false, reason: `only ${rows.length} row${rows.length === 1 ? '' : 's'} of data` };
+    }
     if (rows.length > MAX_ROWS) return { chartable: false, reason: `${rows.length} rows is too many to chart` };
 
     const cols = table.headers.map((_, i) => classifyColumn(table.headers, rows, i));

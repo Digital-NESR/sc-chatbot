@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Table2, BarChart3, BarChart2, LineChart as LineIcon, PieChart as PieIcon, Map as MapIcon, Columns3, Loader2 } from 'lucide-react';
 import type { MarkdownTable } from '@/lib/markdownTable';
-import { analyzeTable, type ChartKind } from '@/lib/chartData';
+import { analyzeTable, MIN_PLOT_ROWS, type ChartKind } from '@/lib/chartData';
 import DataGrid from './DataGrid';
 import { MAX_SERIES, seriesColor } from '@/lib/chartTheme';
 
@@ -98,6 +98,9 @@ export default function ChartBlock({ table }: { table: MarkdownTable }) {
         // Everything else plots a value, so without one there is nothing to
         // draw and the option would open an empty chart.
         if (!a.measures.length) return false;
+        // Nor is there anything worth drawing from two rows - which the cards
+        // handle perfectly well, and do offer.
+        if (a.data.length < MIN_PLOT_ROWS) return false;
         if (v === 'pie') return effectiveActive.length === 1 && a.data.length <= 8;
         if (v === 'map') return a.mappable;
         return true;
