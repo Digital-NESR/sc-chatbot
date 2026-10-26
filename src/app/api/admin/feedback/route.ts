@@ -226,3 +226,63 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }
+
+/**
+ * Take one answer out of the review queue entirely.
+ *
+ * This clears the feedback, not the answer: the message, the conversation and
+ * the usage figures are untouched. What goes is everything anyone recorded
+ * about it - the user's thumb and their words, an admin's thumb and theirs,
+ * and the triage note.
+ *
+ * Withdrawing your own rating never needed this; clicking the thumb again
+ * does that. This is for feedback that should not have been left at all - a
+ * test click, a mis-click, a complaint already dealt with elsewhere - and
+ * because it throws away somebody else's words, nothing here is recoverable
+ * and the caller is expected to have asked first.
+ */
+export async function DELETE(request: Request) {
+    const session = await getServerSession(authOptions);
+    if (!isAdmin(session?.user?.email)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    try {
+        const { messageId } = await request.json();
+        if (!messageId || typeof messageId !== 'string') {
+            return NextResponse.json({ error: 'Missing messageId' }, { status: 400 });
+        }
+
+        const existing = await prisma.message.findUnique({
+            where: { id: messageId },
+            select: { id: true },
+        });
+        if (!existing) {
+            return NextResponse.json({ error: 'No such message' }, { status: 404 });
+        }
+
+        await prisma.message.update({
+            where: { id: messageId },
+            data: {
+                feedback: null,
+                feedbackAt: null,
+                feedbackReason: null,
+                feedbackNote: null,
+                adminFeedback: null,
+                adminFeedbackBy: null,
+                adminFeedbackAt: null,
+                adminFeedbackReason: null,
+                adminFeedbackNote: null,
+                reviewNote: null,
+                reviewStatus: null,
+                reviewedAt: null,
+            },
+        });
+
+        console.warn(`Feedback cleared on message ${messageId} by ${session?.user?.email}`);
+        return NextResponse.json({ success: true, id: messageId });
+    } catch (error) {
+        console.error('Failed to delete feedback:', error);
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    }
+}

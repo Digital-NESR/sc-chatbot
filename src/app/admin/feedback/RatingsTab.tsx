@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
-    ThumbsUp, ThumbsDown, Loader2, RefreshCw, Check, Copy, CircleDot, Inbox,
+    ThumbsUp, ThumbsDown, Loader2, RefreshCw, Check, Copy, CircleDot, Inbox, Trash2,
 } from 'lucide-react';
 import { siteConfig } from '@/config/site';
 
@@ -98,6 +98,12 @@ export default function RatingsTab() {
     const [note, setNote] = useState('');
     const [saving, setSaving] = useState(false);
     const [copied, setCopied] = useState(false);
+
+    // The id waiting on a confirmation, and the one being deleted. Held apart
+    // so the dialog cannot be answered for a row that has since scrolled away.
+    const [confirmId, setConfirmId] = useState<string | null>(null);
+    const [deleting, setDeleting] = useState(false);
+    const [deleteFailed, setDeleteFailed] = useState(false);
 
     // Anything rated after the page opened is new to whoever is watching. Kept
     // in a ref so a refresh does not move the goalposts mid-session.
@@ -202,6 +208,45 @@ export default function RatingsTab() {
             setSaving(false);
         }
     };
+
+    /**
+     * Clear everything recorded about one answer, after the dialog says yes.
+     *
+     * The answer itself stays. What goes is the feedback on it, including
+     * somebody else's words, so the row only leaves the list once the server
+     * has confirmed - no optimistic removal to undo.
+     */
+    const remove = async (id: string) => {
+        setDeleting(true);
+        setDeleteFailed(false);
+        try {
+            const res = await fetch('/api/admin/feedback', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messageId: id }),
+            });
+            if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+            setItems(prev => prev.filter(i => i.id !== id));
+            if (selectedId === id) setSelectedId(null);
+            setConfirmId(null);
+        } catch (err) {
+            console.error(err);
+            setDeleteFailed(true);
+        } finally {
+            setDeleting(false);
+        }
+    };
+
+    const confirmItem = items.find(i => i.id === confirmId) ?? null;
+
+    useEffect(() => {
+        if (!confirmId) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && !deleting) setConfirmId(null);
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [confirmId, deleting]);
 
     /** Everything needed to act on this one, in one clipboard paste. */
     const copyForReview = async () => {
@@ -466,14 +511,25 @@ export default function RatingsTab() {
                                         </p>
                                     )}
                                 </div>
-                                <button
-                                    onClick={copyForReview}
-                                    title="Copy the question and answer"
-                                    className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600 hover:bg-slate-50"
-                                >
-                                    {copied ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
-                                    {copied ? 'Copied' : 'Copy'}
-                                </button>
+                                <div className="shrink-0 flex items-center gap-1.5">
+                                    <button
+                                        onClick={copyForReview}
+                                        title="Copy the question and answer"
+                                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600 hover:bg-slate-50"
+                                    >
+                                        {copied ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
+                                        {copied ? 'Copied' : 'Copy'}
+                                    </button>
+                                    <button
+                                        onClick={() => { setDeleteFailed(false); setConfirmId(selected.id); }}
+                                        title="Delete this feedback"
+                                        aria-label="Delete this feedback"
+                                        className="p-1.5 rounded-lg border border-slate-200 text-slate-400
+                                                   hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors"
+                                    >
+                                        <Trash2 size={13} />
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="overflow-y-auto px-5 py-4 flex-1">
@@ -596,6 +652,72 @@ export default function RatingsTab() {
                             </div>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* Confirmation. It names what actually goes, because "delete
+                feedback" reads like undoing your own thumb and this also
+                throws away whatever the user wrote. */}
+            {confirmItem && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+                    onClick={() => !deleting && setConfirmId(null)}
+                >
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="delete-feedback-title"
+                        onClick={e => e.stopPropagation()}
+                        className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 p-5"
+                    >
+                        <h3 id="delete-feedback-title" className="font-semibold text-slate-900">
+                            Delete this feedback?
+                        </h3>
+                        <p className="mt-2 text-sm text-slate-600">
+                            The answer and the conversation stay. What goes is everything recorded about it:
+                        </p>
+                        <ul className="mt-2 space-y-1 text-sm text-slate-600 list-disc list-inside">
+                            {confirmItem.feedback && (
+                                <li>
+                                    the user&apos;s thumbs {confirmItem.feedback}
+                                    {confirmItem.feedbackReason && ` — ${reasonLabel(confirmItem.feedbackReason)}`}
+                                    {confirmItem.feedbackNote && ` — “${confirmItem.feedbackNote}”`}
+                                </li>
+                            )}
+                            {confirmItem.adminFeedback && (
+                                <li>
+                                    the admin thumbs {confirmItem.adminFeedback}
+                                    {confirmItem.adminFeedbackBy && ` from ${confirmItem.adminFeedbackBy}`}
+                                    {confirmItem.adminFeedbackReason && ` — ${adminReasonLabel(confirmItem.adminFeedbackReason)}`}
+                                </li>
+                            )}
+                            {confirmItem.reviewNote && <li>the review note</li>}
+                        </ul>
+                        <p className="mt-3 text-xs text-slate-400">
+                            This cannot be undone. To take back only your own rating, click your thumb again instead.
+                        </p>
+                        {deleteFailed && (
+                            <p className="mt-2 text-sm text-red-600">Could not delete it. Nothing was changed.</p>
+                        )}
+                        <div className="mt-4 flex items-center justify-end gap-2">
+                            <button
+                                onClick={() => setConfirmId(null)}
+                                disabled={deleting}
+                                className="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                            >
+                                Keep it
+                            </button>
+                            <button
+                                onClick={() => remove(confirmItem.id)}
+                                disabled={deleting}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium
+                                           bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                            >
+                                {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                                Delete feedback
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
