@@ -219,6 +219,14 @@ export const siteConfig = {
            The middle one is the whole wait, so it is the one that has to say
            something - and the elapsed count beside it is what tells a reader
            the thing is moving rather than hung. */
+        /* With names, from the line the orchestrator writes before it calls
+           anything. "Asking Material AI and SourceGuide AI" is the sentence
+           the whole exercise was for. */
+        asking: (names: string[]) =>
+            names.length === 1
+                ? `Asking ${names[0]}`
+                : `Asking ${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`,
+
         phases: {
             orchestrator: {
                 thinking: 'Working out which assistants this needs',
