@@ -397,7 +397,10 @@ function toEventStream(
 
 export async function POST(request: Request) {
     let userEmail: string | null = null;
-    let agentName: string | null = null;
+    /* The agent ID, held out here so the catch below can name it too.
+       The id and not the display name: the client's own failure reports
+       send the id, and two vocabularies in one column make it unfilterable. */
+    let agentKey: string | null = null;
     let conversationId: string | null = null;
     let question: string | null = null;
 
@@ -429,7 +432,7 @@ export async function POST(request: Request) {
         const body = await request.json();
         const { message, agentId, agent, sessionId } = body;
 
-        agentName = agent ?? null;
+        agentKey = agentId ?? null;
         conversationId = sessionId ?? null;
         question = typeof message === 'string' ? message : null;
 
@@ -464,7 +467,7 @@ export async function POST(request: Request) {
             judged = await classify(message);
             if (judged) {
                 void logGuardrailEvents({
-                    userEmail, sessionId, botId: agent,
+                    userEmail, sessionId, botId: agentId,
                     surface: 'input',
                     verdict: 'flag',
                     enforced: judged.verdict === 'attack' && classifierAction === 'enforce',
@@ -482,7 +485,7 @@ export async function POST(request: Request) {
 
         if (inbound.matches.length) {
             void logGuardrailEvents({
-                userEmail, sessionId, botId: agent,
+                userEmail, sessionId, botId: agentId,
                 surface: 'input',
                 verdict: inbound.verdict === 'block' ? 'block' : 'flag',
                 enforced: inbound.verdict === 'block',
@@ -557,7 +560,7 @@ export async function POST(request: Request) {
                     status: upstream.status,
                     message: `Agent webhook returned ${upstream.status}`,
                     detail,
-                    userEmail, sessionId, botId: agent, question,
+                    userEmail, sessionId, botId: agentId, question,
                 });
                 return NextResponse.json(
                     // 504 is n8n saying it gave up waiting; anything else is
@@ -579,7 +582,7 @@ export async function POST(request: Request) {
                         status: 200,
                         message: failure,
                         detail,
-                        userEmail, sessionId, botId: agent, question,
+                        userEmail, sessionId, botId: agentId, question,
                     });
                 },
                 /* The answer has already been sent by the time this runs - it
@@ -592,7 +595,7 @@ export async function POST(request: Request) {
                     const outbound = evaluate('output', answer);
                     if (!outbound.matches.length) return;
                     void logGuardrailEvents({
-                        userEmail, sessionId, botId: agent,
+                        userEmail, sessionId, botId: agentId,
                         surface: 'output',
                         // Never 'block': see above. It went out either way.
                         verdict: 'flag',
@@ -639,7 +642,7 @@ export async function POST(request: Request) {
                 status,
                 message: `Agent webhook returned ${status}`,
                 detail: responseText,
-                userEmail, sessionId, botId: agent, question,
+                userEmail, sessionId, botId: agentId, question,
             });
             return NextResponse.json(
                 { error: 'Agent request failed', status },
@@ -669,7 +672,7 @@ export async function POST(request: Request) {
                 stage: 'timeout',
                 status: 504,
                 message: error.message,
-                userEmail, sessionId: conversationId, botId: agentName, question,
+                userEmail, sessionId: conversationId, botId: agentKey, question,
             });
             return NextResponse.json(
                 { error: 'Agent timed out', detail: error.message },
@@ -683,7 +686,7 @@ export async function POST(request: Request) {
             status: 500,
             message: error instanceof Error ? error.message : String(error),
             detail: error instanceof Error ? error.stack : String(error),
-            userEmail, sessionId: conversationId, botId: agentName, question,
+            userEmail, sessionId: conversationId, botId: agentKey, question,
         });
         return NextResponse.json(
             { error: 'Internal Server Error', detail: String(error) },
