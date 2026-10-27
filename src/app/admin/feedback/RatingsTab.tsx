@@ -437,7 +437,7 @@ export default function RatingsTab() {
                                                     <Check className="w-3 h-3 text-emerald-500 ml-auto shrink-0" />
                                                 )}
                                             </span>
-                                            <span className="block text-[13px] text-slate-800 line-clamp-2">
+                                            <span className="text-[13px] text-slate-800 line-clamp-2">
                                                 {i.question ?? '(question not found)'}
                                             </span>
                                             {(i.feedbackReason || i.adminFeedbackReason) && (

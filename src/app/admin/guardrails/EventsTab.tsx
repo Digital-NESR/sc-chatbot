@@ -357,7 +357,7 @@ export default function EventsTab() {
                                             <span className="block text-[13px] font-medium text-slate-800 truncate">
                                                 {i.ruleLabel}
                                             </span>
-                                            <span className="block text-[11.5px] text-slate-500 line-clamp-2 font-mono mt-0.5">
+                                            <span className="text-[11.5px] text-slate-500 line-clamp-2 font-mono mt-0.5">
                                                 {i.excerpt}
                                             </span>
                                         </span>

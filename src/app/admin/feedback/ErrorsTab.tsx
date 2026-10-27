@@ -337,7 +337,7 @@ export default function ErrorsTab() {
                                                 <Check className="w-3 h-3 text-emerald-500 shrink-0" />
                                             )}
                                         </span>
-                                        <span className="block text-[13px] text-slate-800 line-clamp-2">{i.message}</span>
+                                        <span className="text-[13px] text-slate-800 line-clamp-2">{i.message}</span>
                                         {i.question && (
                                             <span className="block text-[11px] text-slate-400 line-clamp-1 mt-0.5">
                                                 asked: {i.question}
