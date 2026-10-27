@@ -47,6 +47,20 @@ export const FOLLOW_UP_MARKER = '**Ask next:**';
 export const ASKING_MARKER = '**Asking:**';
 
 /**
+ * The marker as it actually arrives, bold or not.
+ *
+ * The prompt asks for `**Asking:**`. Sonnet writes that; Haiku writes a plain
+ * `Asking:` about as often, and the orchestrator moved to Haiku for speed. A
+ * marker that is not recognised is not merely a missed progress line - the
+ * announcement lands in the answer bubble instead, which is worse than never
+ * having asked for it.
+ */
+const ASKING_RE = /^\*{0,2}Asking:\*{0,2}/;
+
+/** The complete forms, for deciding whether half a line is a marker arriving. */
+const ASKING_FORMS = ['**Asking:**', 'Asking:'] as const;
+
+/**
  * Who can appear after the marker.
  *
  * Taken from the agent list rather than written out, so a renamed specialist
@@ -109,11 +123,13 @@ function splitAskingOnce(content: string): { body: string; asking: string[] } {
     /* The marker is still arriving. Half of it is not an answer, and showing
        it opens a bubble containing "**Asking" with a cursor after it, three
        seconds before there is anything to read. */
-    if (line.length > 0 && lines.length === first + 1 && ASKING_MARKER.startsWith(line)) {
+    if (line.length > 0 && lines.length === first + 1
+        && ASKING_FORMS.some(form => form.startsWith(line))) {
         return { body: '', asking: [] };
     }
 
-    if (!line.startsWith(ASKING_MARKER)) return { body: content, asking: [] };
+    const marker = line.match(ASKING_RE);
+    if (!marker) return { body: content, asking: [] };
 
     /* Read the names off the front, from the set that exists, rather than
        splitting the rest of the line on commas.
@@ -129,7 +145,7 @@ function splitAskingOnce(content: string): { body: string; asking: string[] } {
        and dropped it. The reader lost the sentence that answered the question
        and never knew. Matching known names stops at the last real one and
        hands back everything after it as the answer. */
-    let rest = line.slice(ASKING_MARKER.length);
+    let rest = line.slice(marker[0].length);
     const named: string[] = [];
     for (;;) {
         const ahead = rest.replace(/^[\s,]+/, '');
@@ -145,7 +161,10 @@ function splitAskingOnce(content: string): { body: string; asking: string[] } {
     // leave the progress line saying "Asking" and nothing else.
     if (!named.length) return { body: content, asking: [] };
 
-    const tail = rest.replace(/^[\s,]+/, '');
+    /* Punctuation closing the announcement rather than opening the answer:
+       Haiku writes "Asking: Track My Request." and the full stop belongs to
+       the line being removed, not to the sentence that follows it. */
+    const tail = rest.replace(/^[\s,.;:]+/, '');
     return {
         body: [tail, ...lines.slice(first + 1)].join('\n').trim(),
         asking: named,

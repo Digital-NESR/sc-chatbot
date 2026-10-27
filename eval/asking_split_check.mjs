@@ -13,6 +13,8 @@
  *   node eval/asking_split_check.mjs
  */
 const ASKING_MARKER = '**Asking:**';
+const ASKING_RE = /^\*{0,2}Asking:\*{0,2}/;
+const ASKING_FORMS = ['**Asking:**', 'Asking:'];
 const SPECIALIST_NAMES = ['Track My Request', 'SourceGuide AI', 'SC Policy AI', 'Material AI'];
 
 function splitAsking(content) {
@@ -37,12 +39,14 @@ function splitAskingOnce(content) {
 
   const line = lines[first]?.trimStart() ?? '';
 
-  if (line.length > 0 && lines.length === first + 1 && ASKING_MARKER.startsWith(line)) {
+  if (line.length > 0 && lines.length === first + 1
+      && ASKING_FORMS.some((form) => form.startsWith(line))) {
     return { body: '', asking: [] };
   }
-  if (!line.startsWith(ASKING_MARKER)) return { body: content, asking: [] };
+  const marker = line.match(ASKING_RE);
+  if (!marker) return { body: content, asking: [] };
 
-  let rest = line.slice(ASKING_MARKER.length);
+  let rest = line.slice(marker[0].length);
   const named = [];
   for (;;) {
     const ahead = rest.replace(/^[\s,]+/, '');
@@ -55,7 +59,7 @@ function splitAskingOnce(content) {
   }
   if (!named.length) return { body: content, asking: [] };
 
-  const tail = rest.replace(/^[\s,]+/, '');
+  const tail = rest.replace(/^[\s,.;:]+/, '');
   return { body: [tail, ...lines.slice(first + 1)].join('\n').trim(), asking: named };
 }
 
@@ -92,6 +96,16 @@ const cases = [
     asking: ['Material AI', 'SourceGuide AI'],
     body: 'Both agree.',
   }],
+  // Verbatim from the orchestrator on Haiku 4.5, 27 Oct: no asterisks, and a
+  // full stop closing the line before the answer runs straight on.
+  ['haiku, unbolded and run-on', 'Asking: Track My Request.**$198.2 million** in capex.', {
+    asking: ['Track My Request'],
+    body: '**$198.2 million** in capex.',
+  }],
+  ['haiku, unbolded, own line', 'Asking: Material AI\n\nWe hold 412 of them.', {
+    asking: ['Material AI'], body: 'We hold 412 of them.',
+  }],
+  ['haiku marker half arrived', 'Askin', { asking: [], body: '' }],
   ['no marker at all', 'There are 722 purchase orders.', {
     asking: [], body: 'There are 722 purchase orders.',
   }],
