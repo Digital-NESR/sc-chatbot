@@ -5,6 +5,8 @@ import http from 'http';
 import { authOptions } from '@/lib/authOptions';
 import { logAppError } from '@/lib/logError';
 import { siteConfig, agentEndpoint, MAX_MESSAGE_CHARS } from '@/config/site';
+import { evaluate } from '@/lib/guardrails/evaluate';
+import { logGuardrailEvents, loadRuleActions } from '@/lib/logGuardrail';
 import {
     encodeEvent,
     textFromBufferedBody,
@@ -50,6 +52,16 @@ const MAX_BUFFERED_FALLBACK = 2_000_000;
  * setting it here and in n8n can be done in either order without an outage.
  */
 const SHARED_SECRET = process.env.N8N_SHARED_SECRET || '';
+
+/**
+ * How much of an answer the output rules read.
+ *
+ * An answer is a few thousand characters; a runaway table is not, and running
+ * a dozen regexes over a megabyte on every request would be a way to make the
+ * product slower in the name of making it safer. The rules look for an
+ * injected instruction or a leaked prompt, both of which appear early.
+ */
+const MAX_ANSWER_SCAN = 40_000;
 
 /** Thrown on our own deadline, so the handler can tell it apart from a socket error. */
 class UpstreamTimeout extends Error {
@@ -166,9 +178,17 @@ async function makeRequest(
 function toEventStream(
     upstream: Upstream,
     onFailure: (message: string, detail?: string) => void,
+    /* Called once with the whole answer, after the last byte. The guardrails
+       read it there rather than per delta: checking a growing string on every
+       chunk would run the output rules dozens of times per answer and could
+       only ever delay a token for a verdict nobody acts on mid-stream. */
+    onAnswer: (text: string) => void,
 ): ReadableStream<Uint8Array> {
     const { res } = upstream;
     const encoder = new TextEncoder();
+
+    /** What the client was sent, capped. Only ever read at the end. */
+    let answer = '';
 
     let lineBuffer = '';
     let sawItem = false;
@@ -279,6 +299,7 @@ function toEventStream(
                 rawBody = '';
                 if (item.text) {
                     sawText = true;
+                    if (answer.length < MAX_ANSWER_SCAN) answer += item.text;
                     send(encodeEvent({ t: 'delta', v: item.text }));
                 }
             };
@@ -335,10 +356,14 @@ function toEventStream(
                     }
 
                     const text = textFromBufferedBody(rawBody);
-                    if (text) send(encodeEvent({ t: 'delta', v: text }));
+                    if (text) {
+                        if (answer.length < MAX_ANSWER_SCAN) answer += text;
+                        send(encodeEvent({ t: 'delta', v: text }));
+                    }
                 }
 
                 send(encodeEvent({ t: 'done' }));
+                onAnswer(answer);
                 finish();
             });
 
@@ -404,6 +429,34 @@ export async function POST(request: Request) {
             );
         }
 
+        /* The stored rule actions, before anything is judged by them. One
+           indexed read of a table with a couple of dozen rows, per request,
+           so a change in the console takes effect on the next answer rather
+           than the next deploy. */
+        await loadRuleActions();
+
+        const inbound = evaluate('input', message);
+        if (inbound.matches.length) {
+            void logGuardrailEvents({
+                userEmail, sessionId, botId: agent,
+                surface: 'input',
+                verdict: inbound.verdict === 'block' ? 'block' : 'flag',
+                enforced: inbound.verdict === 'block',
+                question: message,
+                matches: inbound.matches,
+            });
+        }
+        if (inbound.verdict === 'block') {
+            console.warn(
+                `[guardrails] blocked a question from ${userEmail}:`,
+                inbound.matches.map(m => m.ruleId).join(', '),
+            );
+            return NextResponse.json(
+                { error: 'Blocked by a guardrail', kind: 'guardrail' },
+                { status: 422 },
+            );
+        }
+
         /* The endpoint is resolved HERE, from the agent id, against the
            configured list. It used to arrive in the request body with only a
            new URL() parse to check it, which meant a caller could name any
@@ -464,15 +517,37 @@ export async function POST(request: Request) {
                 );
             }
 
-            const body = toEventStream(upstream, (message, detail) => {
-                void logAppError({
-                    stage: 'network',
-                    status: 200,
-                    message,
-                    detail,
-                    userEmail, sessionId, botId: agent, question,
-                });
-            });
+            const body = toEventStream(
+                upstream,
+                (failure, detail) => {
+                    void logAppError({
+                        stage: 'network',
+                        status: 200,
+                        message: failure,
+                        detail,
+                        userEmail, sessionId, botId: agent, question,
+                    });
+                },
+                /* The answer has already been sent by the time this runs - it
+                   is called after the last byte. Nothing here can unsend it,
+                   and that is the honest position: an output rule records what
+                   went out. Stopping an answer mid-stream would mean holding
+                   every token back until the end, which is the whole latency
+                   win given away for a verdict that has never yet fired. */
+                answer => {
+                    const outbound = evaluate('output', answer);
+                    if (!outbound.matches.length) return;
+                    void logGuardrailEvents({
+                        userEmail, sessionId, botId: agent,
+                        surface: 'output',
+                        // Never 'block': see above. It went out either way.
+                        verdict: 'flag',
+                        enforced: false,
+                        question,
+                        matches: outbound.matches,
+                    });
+                },
+            );
 
             return new Response(body, {
                 status: 200,

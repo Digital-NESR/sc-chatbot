@@ -149,3 +149,78 @@ model ErrorLog {
   @@index([createdAt])
   @@index([reviewStatus])
 }
+
+/**
+ * One guardrail rule firing on one message.
+ *
+ * Sits beside ErrorLog and is shaped like it on purpose: standalone, no foreign
+ * key on sessionId so a row survives the conversation being deleted, indexed on
+ * time and on triage state, and carrying the same reviewNote / reviewStatus /
+ * reviewedAt triad the other two admin queues already drive.
+ *
+ * `enforced` is the honest record of what actually happened to the request, not
+ * what the rule would like to have happened. While a rule is shadowing, this is
+ * false and the answer went through - which is the whole point of shadow mode,
+ * and the thing that would be impossible to reconstruct later if only the
+ * verdict were stored.
+ *
+ * `falsePositive` is set by hand from the console. It is the number that
+ * decides whether a rule is ready to enforce, so it earns a column rather than
+ * living inside the review note.
+ */
+model GuardrailEvent {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  userEmail String?
+  sessionId String?
+  botId     String?
+
+  // 'input' (what was asked), 'output' (what came back), 'sql' (what an agent
+  // tried to run). The last is written by n8n rather than by the app.
+  surface String
+  // Which rule, from src/lib/guardrails/rules.ts.
+  ruleId   String
+  severity String
+  // 'allow' is never stored - only a rule that matched is worth a row.
+  verdict  String
+  // Whether the request was actually stopped. False while shadowing.
+  enforced Boolean @default(false)
+
+  // The span that matched, clipped. Enough to judge the rule, not the whole
+  // message - the message is already on Message, and copying it here would
+  // duplicate everything a conversation holds into a second table.
+  excerpt  String? @db.Text
+  // What was asked, for an output or sql event where the excerpt alone does
+  // not say what the user was trying to do.
+  question String? @db.Text
+
+  // Set from the console when a match turns out to be wrong. Null means
+  // nobody has judged it yet, which is different from false.
+  falsePositive Boolean?
+
+  reviewNote   String?   @db.Text
+  reviewStatus String?
+  reviewedAt   DateTime?
+
+  @@index([createdAt])
+  @@index([reviewStatus])
+  @@index([ruleId])
+}
+
+/**
+ * A rule whose action has been changed from its default.
+ *
+ * Sparse, exactly like DisplayName: a row exists only where somebody moved a
+ * rule off the setting it ships with, so "has this been changed?" is answered
+ * by the row existing, and restoring the default is a delete rather than a
+ * lookup. The defaults live in src/lib/guardrails/rules.ts and a new rule
+ * ships without needing a migration.
+ */
+model GuardrailRule {
+  id        String   @id
+  // 'off' | 'shadow' | 'enforce'
+  action    String
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+}
