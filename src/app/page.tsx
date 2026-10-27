@@ -17,7 +17,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { siteConfig, agentEndpoint, type AgentId } from '@/config/site';
 import { parseMarkdownTables, splitByTables, normalizeAnswerMarkdown } from '@/lib/markdownTable';
-import { splitAnswer, splitAsking } from '@/lib/derivation';
+import { splitAnswer } from '@/lib/derivation';
 import { applyDisplayNames, setDisplayNames } from '@/config/dataNames';
 import { exportTablesToXlsx, tablesToTsv, safeFileName } from '@/lib/exportTables';
 import { readChatStream, RETRYABLE, type ChatFailure, type ChatPhase } from '@/lib/chatStream';
@@ -140,12 +140,9 @@ function HistorySkeleton() {
 function PhaseIndicator({
   phase,
   agentId,
-  asking,
 }: {
   phase: ChatPhase;
   agentId: AgentId;
-  /** Named specialists, when the orchestrator has said who. */
-  asking: string[];
 }) {
   const [seconds, setSeconds] = useState(0);
 
@@ -158,11 +155,7 @@ function PhaseIndicator({
   }, [phase]);
 
   const words = agentId === 'orchestrator' ? text.phases.orchestrator : text.phases.specialist;
-
-  /* The named version only while they are actually being asked. During the
-     writing phase they have already answered, and "Asking Material AI" would
-     be describing something that finished thirty seconds ago. */
-  const label = phase === 'consulting' && asking.length ? text.asking(asking) : words[phase];
+  const label = words[phase];
 
   return (
     <span className="flex items-center gap-2 text-xs font-medium text-slate-400">
@@ -706,8 +699,6 @@ export default function Home() {
 
   // Where the agent has got to, while there is still nothing to show.
   const [phase, setPhase] = useState<ChatPhase | null>(null);
-  // And who it said it was about to ask, if it said.
-  const [asking, setAsking] = useState<string[]>([]);
 
   // What a screen reader is told. Nothing else renders it.
   const [announcement, setAnnouncement] = useState('');
@@ -750,7 +741,6 @@ export default function Home() {
     abortRef.current = null;
     setStreaming(null);
     setPhase(null);
-    setAsking([]);
   };
 
   const handleStopGenerating = useCallback(() => {
@@ -961,7 +951,6 @@ export default function Home() {
     }
     setIsLoading(true);
     setPhase(null);
-    setAsking([]);
     announce(text.a11y.working(activeAgentName));
 
     const controller = new AbortController();
@@ -1092,13 +1081,7 @@ export default function Home() {
           const now = Date.now();
           if (!force && now - lastCommit < 100) return;
           lastCommit = now;
-          /* The announcement is not part of the answer, and at 1.4 seconds it
-             is the ONLY thing in the answer - so stripping it here is what
-             keeps the progress line up for the forty seconds that follow
-             instead of replacing it with a bubble containing one bold line. */
-          const { body, asking: named } = splitAsking(aiContent);
-          if (named.length) setAsking(named);
-          setStreaming(s => (s && s.id === streamId ? { id: s.id, content: body } : s));
+          setStreaming(s => (s && s.id === streamId ? { id: s.id, content: aiContent } : s));
         };
 
         try {
@@ -1278,8 +1261,7 @@ export default function Home() {
         setIsLoading(false);
         setStreaming(null);
         setPhase(null);
-        setAsking([]);
-      }
+          }
     }
   };
 
@@ -2102,7 +2084,7 @@ export default function Home() {
                       got to, which is about a second in. After that the word
                       would be saying less than the line next to it. */}
                   {phase ? (
-                    <PhaseIndicator phase={phase} agentId={activeAgentId} asking={asking} />
+                    <PhaseIndicator phase={phase} agentId={activeAgentId} />
                   ) : (
                     <ThinkingIndicator agentId={activeAgentId} />
                   )}
