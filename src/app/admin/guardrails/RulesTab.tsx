@@ -31,6 +31,7 @@ type Rule = {
     updatedBy: string | null;
     hits: number;
     falsePositives: number;
+    unreviewed: number;
 };
 
 const ACTIONS: { value: Action; label: string; hint: string }[] = [
@@ -162,12 +163,22 @@ export default function RulesTab() {
                                                 <span className="text-slate-600">
                                                     {r.hits} in {windowDays} days
                                                 </span>
-                                                {r.falsePositives > 0 ? (
+                                                {r.falsePositives > 0 && (
                                                     <span className="text-amber-600">
                                                         {' · '}{r.falsePositives} wrong
                                                     </span>
+                                                )}
+                                                {/* Unjudged is not the same as right, and
+                                                    conflating them is how a rule gets
+                                                    enforced on evidence nobody looked at. */}
+                                                {r.unreviewed > 0 ? (
+                                                    <span className="text-slate-400">
+                                                        {' · '}{r.unreviewed} not yet looked at
+                                                    </span>
                                                 ) : (
-                                                    <span className="text-emerald-600">{' · '}none wrong</span>
+                                                    <span className="text-emerald-600">
+                                                        {' · '}all reviewed
+                                                    </span>
                                                 )}
                                             </>
                                         )}

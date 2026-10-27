@@ -41,6 +41,7 @@ export async function GET() {
             severity: r.severity,
             verdict: r.verdict,
             enforced: r.enforced,
+            backfilled: r.backfilled,
             excerpt: r.excerpt,
             question: r.question,
             falsePositive: r.falsePositive,

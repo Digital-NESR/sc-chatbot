@@ -31,7 +31,7 @@ export async function GET() {
     try {
         const since = new Date(Date.now() - STATS_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
-        const [overrides, hits, falsePositives] = await Promise.all([
+        const [overrides, hits, falsePositives, unreviewed] = await Promise.all([
             prisma.guardrailRule.findMany({ select: { id: true, action: true, updatedBy: true } }),
             prisma.guardrailEvent.groupBy({
                 by: ['ruleId'],
@@ -43,11 +43,21 @@ export async function GET() {
                 where: { createdAt: { gte: since }, falsePositive: true },
                 _count: { _all: true },
             }),
+            /* Nobody has judged these yet. Without the distinction, a rule
+               with forty unexamined matches reads as "none wrong" - which is
+               the sentence someone would enforce on, and it would not mean
+               what they took it to mean. */
+            prisma.guardrailEvent.groupBy({
+                by: ['ruleId'],
+                where: { createdAt: { gte: since }, falsePositive: null },
+                _count: { _all: true },
+            }),
         ]);
 
         const stored = new Map(overrides.map(o => [o.id, o]));
         const hitCount = new Map(hits.map(h => [h.ruleId, h._count._all]));
         const fpCount = new Map(falsePositives.map(h => [h.ruleId, h._count._all]));
+        const openCount = new Map(unreviewed.map(h => [h.ruleId, h._count._all]));
 
         const items = RULES.map(r => {
             const override = stored.get(r.id);
@@ -64,6 +74,7 @@ export async function GET() {
                 updatedBy: override?.updatedBy ?? null,
                 hits: hitCount.get(r.id) ?? 0,
                 falsePositives: fpCount.get(r.id) ?? 0,
+                unreviewed: openCount.get(r.id) ?? 0,
             };
         });
 

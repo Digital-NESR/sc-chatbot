@@ -30,6 +30,7 @@ type Item = {
     severity: 'low' | 'medium' | 'high';
     verdict: 'flag' | 'block';
     enforced: boolean;
+    backfilled: boolean;
     excerpt: string | null;
     question: string | null;
     falsePositive: boolean | null;
@@ -336,6 +337,14 @@ export default function EventsTab() {
                                                         NEW
                                                     </span>
                                                 )}
+                                                {i.backfilled && (
+                                                    <span
+                                                        title="Found by scanning older messages, not caught as it happened"
+                                                        className="shrink-0 px-1 rounded bg-slate-100 text-slate-500 text-[9px] font-semibold"
+                                                    >
+                                                        PAST
+                                                    </span>
+                                                )}
                                                 {i.falsePositive && (
                                                     <span className="ml-auto shrink-0 px-1 rounded bg-amber-50 text-amber-600 text-[9px] font-semibold">
                                                         WRONG
@@ -380,9 +389,11 @@ export default function EventsTab() {
                                         {selected.ruleLabel}
                                     </h2>
                                     <p className={`mt-1 text-[12px] ${selected.enforced ? 'text-red-600' : 'text-slate-500'}`}>
-                                        {selected.enforced
-                                            ? 'This was blocked — the agent never saw it.'
-                                            : 'Logged only. The answer went through as normal.'}
+                                        {selected.backfilled
+                                            ? 'Found by scanning messages from before the guardrails existed. Nothing was stopped, because nothing was watching at the time.'
+                                            : selected.enforced
+                                                ? 'This was blocked — the agent never saw it.'
+                                                : 'Logged only. The answer went through as normal.'}
                                     </p>
                                 </div>
                                 <button

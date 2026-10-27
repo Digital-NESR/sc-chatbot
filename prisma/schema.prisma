@@ -199,6 +199,12 @@ model GuardrailEvent {
   // nobody has judged it yet, which is different from false.
   falsePositive Boolean?
 
+  // Found by running the rules over messages that predate them, rather than
+  // caught as it happened. The createdAt of such a row is the message's, not
+  // the scan's - so the history reads correctly - and this flag is what stops
+  // that being mistaken for the guardrails having been live at the time.
+  backfilled Boolean @default(false)
+
   reviewNote   String?   @db.Text
   reviewStatus String?
   reviewedAt   DateTime?
