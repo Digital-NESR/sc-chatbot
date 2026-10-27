@@ -5,7 +5,9 @@ import http from 'http';
 import { authOptions } from '@/lib/authOptions';
 import { logAppError } from '@/lib/logError';
 import { siteConfig, agentEndpoint, MAX_MESSAGE_CHARS } from '@/config/site';
-import { evaluate } from '@/lib/guardrails/evaluate';
+import { evaluate, actionFor } from '@/lib/guardrails/evaluate';
+import { classify } from '@/lib/guardrails/classifier';
+import { checkRateLimit } from '@/lib/rateLimit';
 import { logGuardrailEvents, loadRuleActions } from '@/lib/logGuardrail';
 import {
     encodeEvent,
@@ -412,6 +414,18 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
+        /* Before anything expensive. An answer can hold a connection for five
+           minutes and costs real money, and nothing stopped one signed-in
+           person starting thirty of them at once from thirty tabs. */
+        const rate = await checkRateLimit('chat', userEmail);
+        if (!rate.allowed) {
+            console.warn(`[rateLimit] held back a question from ${userEmail}`);
+            return NextResponse.json(
+                { error: 'Too many requests', kind: 'rateLimited' },
+                { status: 429, headers: { 'Retry-After': String(rate.retryAfter) } },
+            );
+        }
+
         const body = await request.json();
         const { message, agentId, agent, sessionId } = body;
 
@@ -436,6 +450,36 @@ export async function POST(request: Request) {
         await loadRuleActions();
 
         const inbound = evaluate('input', message);
+
+        /* The second opinion, on flagged messages only.
+           A pattern rule says a phrase is present; it cannot say whether
+           "ignore all previous rules about deleted lines" is an attack or a
+           buyer being precise about PR line items. The model can, and the
+           useful answer is usually that it is fine - so a benign verdict is
+           recorded as the classifier having CLEARED something, which is the
+           evidence that makes the heuristic above it safe to tune. */
+        const classifierAction = actionFor('classifier');
+        let judged: Awaited<ReturnType<typeof classify>> = null;
+        if (inbound.matches.length && classifierAction !== 'off') {
+            judged = await classify(message);
+            if (judged) {
+                void logGuardrailEvents({
+                    userEmail, sessionId, botId: agent,
+                    surface: 'input',
+                    verdict: 'flag',
+                    enforced: judged.verdict === 'attack' && classifierAction === 'enforce',
+                    question: message,
+                    matches: [{
+                        ruleId: 'classifier',
+                        label: `Model says: ${judged.verdict}`,
+                        severity: 'high',
+                        action: classifierAction,
+                        excerpt: `${judged.verdict} · ${judged.category} · confidence ${judged.confidence} — ${judged.reason}`,
+                    }],
+                });
+            }
+        }
+
         if (inbound.matches.length) {
             void logGuardrailEvents({
                 userEmail, sessionId, botId: agent,
@@ -446,10 +490,20 @@ export async function POST(request: Request) {
                 matches: inbound.matches,
             });
         }
-        if (inbound.verdict === 'block') {
+
+        /* Blocked when a PATTERN rule is enforcing, or when the classifier is
+           enforcing AND calls it an attack. The classifier never rescues a
+           message a pattern rule has already refused - an enforcing rule is a
+           decision already taken, and letting a model overturn it would make
+           the setting mean something other than what it says. */
+        const blockedByClassifier =
+            classifierAction === 'enforce' && judged?.verdict === 'attack';
+
+        if (inbound.verdict === 'block' || blockedByClassifier) {
             console.warn(
                 `[guardrails] blocked a question from ${userEmail}:`,
-                inbound.matches.map(m => m.ruleId).join(', '),
+                [...inbound.matches.map(m => m.ruleId), blockedByClassifier ? 'classifier' : null]
+                    .filter(Boolean).join(', '),
             );
             return NextResponse.json(
                 { error: 'Blocked by a guardrail', kind: 'guardrail' },

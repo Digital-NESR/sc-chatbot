@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { logAppError, type ErrorStage } from '@/lib/logError';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +24,16 @@ export async function POST(request: Request) {
     const userEmail = session?.user?.email;
     if (!userEmail) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    /* This endpoint writes a row with up to 4KB of text the browser chose, and
+       the row is rendered in /admin. Nothing read it back, so a retry loop in
+       one tab could quietly fill the failure queue that somebody is supposed
+       to be able to scan. Reporting a failure is best-effort by design, so
+       being held back here costs nothing. */
+    const rate = await checkRateLimit('errors', userEmail);
+    if (!rate.allowed) {
+        return NextResponse.json({ success: false, throttled: true }, { status: 200 });
     }
 
     try {

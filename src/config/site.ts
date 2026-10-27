@@ -219,6 +219,13 @@ export const siteConfig = {
                 'The assistant finished without producing an answer. This has been logged.',
             dropped:
                 'The connection dropped before this answer finished.',
+            /* A guardrail stopped it. Deliberately says what to do rather than
+               what matched: naming the rule would teach anyone probing the
+               thing exactly which words to change. */
+            guardrail:
+                'That question was stopped before it reached an assistant. If it was an ordinary supply chain question, rephrasing it usually works - and it has been logged for someone to look at.',
+            rateLimited:
+                'That is a lot of questions in a short time, so the next few are being held back. Give it a few minutes and it will clear on its own.',
         },
 
         // The collapsed "how was this worked out" note under an answer

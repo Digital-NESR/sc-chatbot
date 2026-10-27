@@ -71,7 +71,9 @@ export type ChatEvent =
  */
 export type ChatPhase = 'thinking' | 'consulting' | 'writing';
 
-export type ChatFailure = 'refused' | 'timeout' | 'unreachable' | 'empty' | 'dropped';
+export type ChatFailure =
+    | 'refused' | 'timeout' | 'unreachable' | 'empty' | 'dropped'
+    | 'guardrail' | 'rateLimited';
 
 /** Failures where another identical attempt is a reasonable thing to offer. */
 export const RETRYABLE: ReadonlySet<ChatFailure> = new Set<ChatFailure>([

@@ -230,3 +230,26 @@ model GuardrailRule {
   updatedAt DateTime @updatedAt
   updatedBy String?
 }
+
+/**
+ * One fixed window of request counting, per person per route.
+ *
+ * A row rather than memory because the app runs as several instances and an
+ * in-memory counter would let a limit of thirty become thirty per instance -
+ * a limit that looks enforced and is not.
+ *
+ * Fixed windows rather than a sliding log: a sliding window needs a row per
+ * request and a sweep to delete them, and the precision it buys is not worth
+ * either. The edge case it accepts is someone sending a full window's worth at
+ * the end of one window and again at the start of the next. That is twice the
+ * limit in a moment, which is still bounded, and still far short of what an
+ * unlimited endpoint allows.
+ */
+model RateLimit {
+  // "<route>:<email>" - one window per person per endpoint.
+  key         String   @id
+  windowStart DateTime
+  count       Int
+
+  @@index([windowStart])
+}

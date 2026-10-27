@@ -62,6 +62,9 @@ export function evaluate(surface: RuleSurface, text: string): Verdict {
 
     for (const rule of RULES) {
         if (rule.surface !== surface) continue;
+        // Judged elsewhere - see GuardrailRule.model. Running its no-op test
+        // here would quietly report it as never matching.
+        if (rule.model) continue;
         const action = actionFor(rule.id);
         if (action === 'off') continue;
 

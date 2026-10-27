@@ -47,6 +47,15 @@ export interface GuardrailRule {
      * is safe.
      */
     defaultAction: RuleAction;
+    /**
+     * Not a regex. A rule marked this way is judged somewhere else - the
+     * classifier is an LLM behind a webhook and cannot be a pure function -
+     * so evaluate() skips it and the caller runs it itself. It still lives in
+     * this list because it should be visible and settable in exactly the same
+     * place as everything else; being implemented differently is not a reason
+     * to be configured differently.
+     */
+    model?: boolean;
     /** The matched span, or null. Keep it short - it is stored. */
     test(text: string): string | null;
 }
@@ -309,6 +318,22 @@ export const RULES: readonly GuardrailRule[] = [
             /\b(ignore|disregard)\b[^.\n]{0,30}\b(previous|prior|above)\b[^.\n]{0,20}\b(instruction|prompt)|<\|?im_start\|?>|\bnew instructions?:\s/i,
             t,
         ),
+    },
+
+    /* ── Judged by a model, not a pattern ───────────────────────────────── */
+    {
+        id: 'classifier',
+        label: 'Second opinion from a model',
+        hint: 'Runs ONLY on a message another rule has already flagged, and only while this is not Off. Claude Haiku 5.5 reads it and says whether it is really an attempt to redirect the assistant - which is how a flagged-but-ordinary question gets cleared. Roughly a tenth of a cent each, on about one message in two thousand.',
+        surface: 'input',
+        severity: 'high',
+        group: 'Second opinion',
+        /* The only rule that ships Off rather than Watch, because it is the
+           only one that costs money and adds a second of latency when it
+           runs. Everything else is free to leave watching. */
+        defaultAction: 'off',
+        model: true,
+        test: () => null,
     },
 ] as const;
 
