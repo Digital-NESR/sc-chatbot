@@ -50,6 +50,17 @@ export interface AgentConfig {
  * missing stream webhook is not a failure: the agent is simply asked to stream
  * on its buffered webhook, and the whole answer arrives as a single chunk.
  */
+/**
+ * The longest question the app will send, and the browser will accept.
+ *
+ * Generous on purpose - people paste a list of PO numbers, and refusing a
+ * real question is worse than carrying a long one. What it stops is the
+ * unbounded case: there was no limit anywhere, so one request could carry
+ * megabytes into an agent's context. Lives here because both the textarea and
+ * the route need the same number, and two copies would drift.
+ */
+export const MAX_MESSAGE_CHARS = 8_000;
+
 export function agentEndpoint(agent: AgentConfig): { url: string; stream: boolean } {
     if (!agent.streaming) return { url: agent.webhookUrl, stream: false };
     return { url: agent.streamWebhookUrl || agent.webhookUrl, stream: true };

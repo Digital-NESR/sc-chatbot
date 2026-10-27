@@ -15,12 +15,12 @@ import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { siteConfig, agentEndpoint, type AgentId } from '@/config/site';
+import { siteConfig, MAX_MESSAGE_CHARS, type AgentId } from '@/config/site';
 import { parseMarkdownTables, splitByTables, normalizeAnswerMarkdown } from '@/lib/markdownTable';
 import { splitAnswer } from '@/lib/derivation';
 import { applyDisplayNames, setDisplayNames } from '@/config/dataNames';
 import { exportTablesToXlsx, tablesToTsv, safeFileName } from '@/lib/exportTables';
-import { readChatStream, RETRYABLE, type ChatFailure, type ChatPhase } from '@/lib/chatStream';
+import { readChatStream, RETRYABLE, NDJSON_CONTENT_TYPE, type ChatFailure, type ChatPhase } from '@/lib/chatStream';
 
 const { agents, suggestions, thinkingWords, colors, images, text, help } = siteConfig;
 
@@ -1009,29 +1009,36 @@ export default function Home() {
         throw new ReportedError('Could not start or load the conversation');
       }
 
-      // Per agent, from config. The specialists each have a second webhook in
-      // streaming mode; the orchestrator streams on its only one. An agent
-      // with streaming off, or with no stream webhook configured, falls back
-      // to the buffered webhook without anything breaking.
-      const { url: endpoint, stream: wantsStream } = agentEndpoint(activeAgent);
-
+      /* The id, not the URL. The route looks the webhook up from its own copy
+         of the agent list and ignores anything we might send: a client that
+         could name the endpoint could name any host, and the server would
+         have posted to it. Whether the reply streams is settled there too,
+         from the same config. */
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          webhookUrl: endpoint,
+          agentId: activeAgent.id,
           message: messageText,
           agent: activeAgent.name,
           sessionId: currentSessionId,
-          stream: wantsStream,
         }),
         signal: controller.signal,
       });
 
       // If the backend returned a non-ok status, show the generic error
       if (!response.ok) {
+        /* The chat route requires a session now, so an expired one arrives
+           here as a 401. A sign-in that has run out is not a failure of the
+           answer, and telling someone "something went wrong" when the fix is
+           to sign in again wastes their time. */
+        if (response.status === 401) {
+          setIsLoading(false);
+          router.push('/login');
+          return;
+        }
         console.error(`Backend error: ${response.status}`);
         // 502 and 504 are already logged server side with the upstream body,
         // which is the part worth having. Anything else reaching here is ours,
@@ -1067,7 +1074,12 @@ export default function Home() {
       // And why, when it was the agent rather than the user that stopped it.
       let failedWith: ChatFailure | null = null;
 
-      if (wantsStream && response.body) {
+      /* Read it as a stream because the server said it is one, not because
+         config here says it should be. The two used to be set independently
+         and could disagree; now the content type settles it. */
+      const streamed = response.headers.get('content-type')?.includes(NDJSON_CONTENT_TYPE) ?? false;
+
+      if (streamed && response.body) {
         const streamId = Date.now() + 1;
         setStreaming({ id: streamId, content: '' });
 
@@ -2136,6 +2148,10 @@ export default function Home() {
                   }
                 }}
                 placeholder={text.inputPlaceholder(activeAgentName)}
+                /* Matches the server's cap. Stopping the typing is kinder than
+                   accepting it and refusing the send, and the server still
+                   checks because this is only the browser. */
+                maxLength={MAX_MESSAGE_CHARS}
                 className="w-full min-h-[52px] max-h-40 py-3.5 px-5 pr-14 bg-transparent border-none focus:ring-0 focus:outline-none placeholder-gray-400 text-gray-700 font-medium resize-none overflow-y-auto"
                 rows={1}
               />

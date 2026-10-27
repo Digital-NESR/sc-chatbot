@@ -4,6 +4,7 @@ import https from 'https';
 import http from 'http';
 import { authOptions } from '@/lib/authOptions';
 import { logAppError } from '@/lib/logError';
+import { siteConfig, agentEndpoint, MAX_MESSAGE_CHARS } from '@/config/site';
 import {
     encodeEvent,
     textFromBufferedBody,
@@ -39,6 +40,16 @@ const HEARTBEAT_MS = 15_000;
 // Only used when the upstream turns out not to have streamed at all, to
 // recover the answer from the whole body. A streaming reply never accumulates.
 const MAX_BUFFERED_FALLBACK = 2_000_000;
+
+/**
+ * Proves to n8n that a request came through this app.
+ *
+ * The webhook URLs are NEXT_PUBLIC_, so they are in the browser bundle and
+ * anyone who opens devtools can post to them directly - which would walk
+ * straight past every check in this file. Sent only when configured, so
+ * setting it here and in n8n can be done in either order without an outage.
+ */
+const SHARED_SECRET = process.env.N8N_SHARED_SECRET || '';
 
 /** Thrown on our own deadline, so the handler can tell it apart from a socket error. */
 class UpstreamTimeout extends Error {
@@ -88,6 +99,7 @@ function openUpstream(url: string, body: string, signal?: AbortSignal): Promise<
                 // proxy_buffering off for the webhook path before anything
                 // arrived progressively - but it costs nothing to send.
                 'X-Accel-Buffering': 'no',
+                ...(SHARED_SECRET ? { 'X-SCAI-Secret': SHARED_SECRET } : {}),
             },
             agent: isHttps ? insecureAgent : undefined,
         };
@@ -357,46 +369,55 @@ function toEventStream(
 }
 
 export async function POST(request: Request) {
-    // Only ever used to label a failure, so a missing session is not a
-    // problem worth failing the request over.
     let userEmail: string | null = null;
     let agentName: string | null = null;
     let conversationId: string | null = null;
     let question: string | null = null;
 
     try {
+        /* This route is not covered by middleware - the matcher in
+           src/middleware.ts excludes every /api path - so the session check
+           has to happen here, and it has to fail the request rather than
+           merely label it. It used to be read inside a try/catch purely to
+           name the user on an error log, which left the endpoint open to
+           anyone who could reach it. */
+        const session = await getServerSession(authOptions);
+        userEmail = session?.user?.email ?? null;
+        if (!userEmail) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const body = await request.json();
-        const { webhookUrl, message, agent, sessionId, stream } = body;
+        const { message, agentId, agent, sessionId } = body;
 
         agentName = agent ?? null;
         conversationId = sessionId ?? null;
         question = typeof message === 'string' ? message : null;
-        try {
-            userEmail = (await getServerSession(authOptions))?.user?.email ?? null;
-        } catch {
-            // Never let identifying the user get in the way of answering.
+
+        if (typeof message !== 'string' || !message.trim()) {
+            return NextResponse.json({ error: 'Missing message' }, { status: 400 });
         }
-
-        // Log received URL so we can verify env vars are loaded correctly
-        console.log('[/api/chat] webhookUrl received:', webhookUrl);
-
-        if (!webhookUrl || !message) {
-            console.error('[/api/chat] Missing fields — webhookUrl:', webhookUrl, '| message:', message);
+        if (message.length > MAX_MESSAGE_CHARS) {
             return NextResponse.json(
-                { error: 'Missing required fields: webhookUrl and message' },
-                { status: 400 }
+                { error: `Message is too long (${message.length} characters, limit ${MAX_MESSAGE_CHARS})` },
+                { status: 413 }
             );
         }
 
-        // Validate the URL is parseable before attempting the request
-        try {
-            new URL(webhookUrl);
-        } catch {
-            console.error('[/api/chat] Invalid webhookUrl (could not parse):', webhookUrl);
-            return NextResponse.json(
-                { error: `Invalid webhook URL: ${webhookUrl}` },
-                { status: 400 }
-            );
+        /* The endpoint is resolved HERE, from the agent id, against the
+           configured list. It used to arrive in the request body with only a
+           new URL() parse to check it, which meant a caller could name any
+           host and have this server post to it - with rejectUnauthorized
+           off - and read the reply back as an agent's answer. An id that is
+           not in the list is simply not an agent. */
+        const resolved = siteConfig.agents.find(a => a.id === agentId);
+        if (!resolved) {
+            return NextResponse.json({ error: 'Unknown agent' }, { status: 400 });
+        }
+        const { url: webhookUrl, stream } = agentEndpoint(resolved);
+        if (!webhookUrl) {
+            console.error('[/api/chat] No webhook configured for agent:', agentId);
+            return NextResponse.json({ error: 'Agent is not configured' }, { status: 503 });
         }
 
         const requestBody = JSON.stringify({ message, agent, sessionId });

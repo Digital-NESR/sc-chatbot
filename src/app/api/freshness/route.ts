@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/authOptions';
 import https from 'https';
 import http from 'http';
 
@@ -145,6 +147,14 @@ function build(rows: RawRow[]): FreshnessReport {
 }
 
 export async function GET() {
+    /* Signed in, like every other route here. This one had no check and is
+       excluded from the middleware matcher with the rest of /api, so it was
+       serving warehouse table names and load times to anyone who asked. */
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const webhook = process.env.N8N_FRESHNESS_WEBHOOK;
     if (!webhook) {
         // Not configured. The caption simply does not appear - it is not worth
