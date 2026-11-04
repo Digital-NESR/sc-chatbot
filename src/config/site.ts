@@ -1,4 +1,4 @@
-import { Package, Truck, Search, PackageSearch, Sparkles, type LucideIcon } from 'lucide-react';
+import { Package, Truck, Search, PackageSearch, Sparkles, Gauge, type LucideIcon } from 'lucide-react';
 
 /* ─────────────────────────────────────────────
    SINGLE SOURCE OF TRUTH
@@ -743,7 +743,7 @@ export const siteConfig = {
             id: 'orchestrator',
             name: 'SCAI',
             icon: Sparkles,
-            description: 'Works across all four assistants',
+            description: 'Works across all five assistants',
             tagline: 'Ask anything. I will work out which specialists it needs and bring back one answer.',
             disclaimer: 'Every fact comes from a specialist. Questions spanning several take longer',
             webhookUrl: process.env.NEXT_PUBLIC_ORCHESTRATOR_WEBHOOK || '',
@@ -791,6 +791,17 @@ export const siteConfig = {
             disclaimer: 'Status may lag the source system by a few hours',
             webhookUrl: process.env.NEXT_PUBLIC_TRACKREQUEST_WEBHOOK || '',
             streamWebhookUrl: process.env.NEXT_PUBLIC_TRACKREQUEST_STREAM_WEBHOOK || '',
+            streaming: true,
+        },
+        {
+            id: 'assets',
+            name: 'AssetLens AI',
+            icon: Gauge,
+            description: 'Equipment & Asset Utilisation',
+            tagline: 'I can tell you where equipment is, what it is assigned to, and how much it is being used.',
+            disclaimer: 'Utilisation is recorded on a minority of assets; always check the coverage',
+            webhookUrl: process.env.NEXT_PUBLIC_ASSETS_WEBHOOK || '',
+            streamWebhookUrl: process.env.NEXT_PUBLIC_ASSETS_STREAM_WEBHOOK || '',
             streaming: true,
         },
     ] satisfies AgentConfig[],
