@@ -26,12 +26,16 @@ async function listObjects(source: SourceId): Promise<{ schema: string; name: st
   if (SOURCES[source].storage === 'column_docs') {
     return SOURCES[source].objects.map((o) => ({ ...o, note: '' }));
   }
-  // materials: whatever the loader is currently configured to publish.
-  const { rows } = await poolFor('materials').query<{ pg_table: string; load_mode: string | null }>(
-    `SELECT pg_table, load_mode FROM core.load_config WHERE enabled ORDER BY load_order`,
+  // load_config sources: whatever that loader is currently configured to
+  // publish. The schema comes from our own config, never from the request, so
+  // interpolating it carries no injection risk - and it cannot be a bind
+  // parameter, since those cannot name a table.
+  const cfg = SOURCES[source].configSchema || 'core';
+  const { rows } = await poolFor(source).query<{ pg_table: string; load_mode: string | null }>(
+    `SELECT pg_table, load_mode FROM ${cfg}.load_config WHERE enabled ORDER BY load_order`,
   );
   return rows.map((r) => ({
-    schema: 'core',
+    schema: cfg,
     name: r.pg_table,
     note: (r.load_mode || 'full') === 'incremental' ? 'incremental' : '',
   }));
@@ -149,14 +153,16 @@ export async function PATCH(request: Request) {
     await client.query('BEGIN');
 
     if (SOURCES[source].storage === 'load_config') {
+      // Config-supplied schema, not request-supplied - see listObjects.
+      const cfg = SOURCES[source].configSchema || 'core';
       if (description === '') {
         await client.query(
-          `UPDATE core.load_config SET col_comments = col_comments - $2 WHERE pg_table = $1`,
+          `UPDATE ${cfg}.load_config SET col_comments = col_comments - $2 WHERE pg_table = $1`,
           [table, column],
         );
       } else {
         await client.query(
-          `UPDATE core.load_config
+          `UPDATE ${cfg}.load_config
            SET col_comments = coalesce(col_comments, '{}'::jsonb)
                               || jsonb_build_object($2::text, $3::text)
            WHERE pg_table = $1`,
@@ -190,7 +196,10 @@ export async function PATCH(request: Request) {
       );
       await client.query(rows[0].ddl);
     } else if (SOURCES[source].storage === 'load_config') {
-      await client.query(`SELECT core.apply_comments('core', $1)`, [table]);
+      // Each load_config source has its own apply_comments beside its own
+      // load_config, so the schema picks both.
+      const cfg = SOURCES[source].configSchema || 'core';
+      await client.query(`SELECT ${cfg}.apply_comments($1, $2)`, [cfg, table]);
     } else {
       await client.query(`SELECT ai.apply_column_docs($1, $2)`, [schema, table]);
     }

@@ -20,7 +20,7 @@ import { Pool } from 'pg';
  * core.rebuild_track_views() - see db/track_column_docs.sql.
  */
 
-export type SourceId = 'materials' | 'track' | 'sourceguide' | 'sns' | 'catalog';
+export type SourceId = 'materials' | 'track' | 'sourceguide' | 'sns' | 'catalog' | 'assets';
 
 type SourceDef = {
   id: SourceId;
@@ -28,6 +28,13 @@ type SourceDef = {
   database: string;
   /** Where the editable copy lives. 'load_config' is driven by the loader. */
   storage: 'load_config' | 'column_docs';
+  /**
+   * For 'load_config' sources only: the schema holding `load_config` and
+   * `apply_comments`. Materials keeps both in core; AssetLens has its own pair
+   * in assets, because its loader is a separate workflow with its own table
+   * list. Ignored by 'column_docs' sources.
+   */
+  configSchema?: string;
   /** Objects the agent can see. Empty means "ask the database". */
   objects: { schema: string; name: string }[];
 };
@@ -38,7 +45,19 @@ export const SOURCES: Record<SourceId, SourceDef> = {
     label: 'Materials AI',
     database: process.env.MATERIALS_DB_NAME || 'materials_db',
     storage: 'load_config',
+    configSchema: 'core',
     objects: [], // taken from core.load_config
+  },
+  assets: {
+    id: 'assets',
+    label: 'AssetLens AI',
+    // Same database as Materials AI; a different schema, its own loader, and
+    // its own load_config, so it is a separate source rather than more rows
+    // under materials.
+    database: process.env.MATERIALS_DB_NAME || 'materials_db',
+    storage: 'load_config',
+    configSchema: 'assets',
+    objects: [], // taken from assets.load_config
   },
   track: {
     id: 'track',
@@ -108,7 +127,7 @@ export const SOURCES: Record<SourceId, SourceDef> = {
   },
 };
 
-const ORDER: SourceId[] = ['materials', 'track', 'sourceguide', 'catalog', 'sns'];
+const ORDER: SourceId[] = ['materials', 'track', 'sourceguide', 'catalog', 'sns', 'assets'];
 export const SOURCE_LIST = ORDER.map((id) => SOURCES[id]);
 
 export function isSourceId(v: unknown): v is SourceId {

@@ -47,6 +47,19 @@ export const DEFAULT_GROUPS: readonly NameGroup[] = [
         },
     },
     {
+        id: 'assets',
+        title: 'AssetLens AI',
+        hint: 'Equipment, where it sits, and how much it is used.',
+        names: {
+            'assets.asset_month_base': 'Asset base by month',
+            'assets.equipment_utilization': 'Equipment assignments',
+            // Also keyed bare, because the loader records its own table names
+            // without a schema - see tableDisplayName.
+            asset_month_base: 'Asset base by month',
+            equipment_utilization: 'Equipment assignments',
+        },
+    },
+    {
         id: 'track',
         title: 'Track My Request',
         hint: 'Requisitions and purchase orders, from raised to received.',
