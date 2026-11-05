@@ -409,6 +409,18 @@ export const siteConfig = {
             'Who is the bottleneck in approvals right now?',             // 35s
             'Which requests are stuck waiting for approval right now?',   // 37s
         ],
+        /* The two complete ones name September 2026 rather than saying "this
+           month" on purpose. Utilisation is recorded on a minority of assets
+           and the coverage moves: around half the fleet mid-2026, but under
+           5% in a month that has only just started. A suggestion chip reading
+           "this month" would open the product on its worst possible day. */
+        assets: [
+            'Show me the utilisation history for asset: ',
+            'Which jobs has this equipment been on: ',
+            'How utilised are the assets in: ',
+            'What is the average utilisation by segment for September 2026?',  // 13s
+            'How does September 2026 utilisation compare to August 2026?',     // 28s
+        ],
     },
 
 
@@ -651,6 +663,56 @@ export const siteConfig = {
                 'How many quotations do I need before raising a purchase order?',
                 'What is the approval threshold for a purchase order?',
                 'How do I arrange a shipment between NESR locations?',
+            ],
+        },
+
+        /* Taken from AssetLens AI's own answer to "What can you do?", trimmed
+           to a menu. The last group is not padding: the first thing people ask
+           an asset bot is what the asset cost, and it is better to say here
+           that it cannot than to have it refuse on their first question. */
+        assets: {
+            summary:
+                'I cover equipment and how it is used - where an asset is, what it was assigned to, and how many days it actually worked. Utilisation is recorded on a minority of assets, and I tell you the coverage rather than averaging over the gap.',
+            groups: [
+                {
+                    title: 'Finding an asset',
+                    items: [
+                        'Any asset by ID, name or equipment number',
+                        'Its category, segment and country',
+                        'The plant it sits in',
+                    ],
+                },
+                {
+                    title: 'Utilisation',
+                    items: [
+                        'Utilised and assigned days, by month',
+                        'Averages by segment, country or category',
+                        'How a month or quarter compares with the one before',
+                        'The least and most used units over a period',
+                    ],
+                },
+                {
+                    title: 'Jobs & customers',
+                    items: [
+                        'Which service order a piece of equipment went out on',
+                        'Which customer it was assigned to',
+                        'Assignment and job dates',
+                    ],
+                },
+                {
+                    title: 'Not mine to answer',
+                    items: [
+                        'Cost, capex, purchase orders and approvals - Track My Request',
+                        'Stock on hand and the material master - Material AI',
+                        'Utilisation targets, which are not in the data yet',
+                    ],
+                },
+            ],
+            examples: [
+                'What is the average utilisation by segment for September 2026?',
+                'How does September 2026 utilisation compare to August 2026?',
+                'Which country has the most underutilised units in Q3 2026?',
+                'How many main units are active vs idle in Cementing?',
             ],
         },
     },
