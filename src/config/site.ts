@@ -1,4 +1,5 @@
-import { Package, Truck, Search, PackageSearch, Sparkles, Gauge, type LucideIcon } from 'lucide-react';
+import { Package, Truck, Search, PackageSearch, Sparkles, type LucideIcon } from 'lucide-react';
+import Derrick from '@/components/icons/Derrick';
 
 /* ─────────────────────────────────────────────
    SINGLE SOURCE OF TRUTH
@@ -796,7 +797,7 @@ export const siteConfig = {
         {
             id: 'assets',
             name: 'AssetLens AI',
-            icon: Gauge,
+            icon: Derrick,
             description: 'Equipment & Asset Utilisation',
             tagline: 'I can tell you where equipment is, what it is assigned to, and how much it is being used.',
             disclaimer: 'Utilisation is recorded on a minority of assets; always check the coverage',

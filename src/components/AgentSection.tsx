@@ -44,7 +44,9 @@ export function AgentButton({
             title={collapsed ? undefined : agent.name}
             aria-label={agent.name}
             className={`relative group flex items-center rounded-lg text-sm font-medium transition-colors ${
-                collapsed ? 'w-[52px] shrink-0 justify-center px-0 py-2.5' : 'w-full gap-3 px-3 py-3'
+                collapsed
+                    ? 'flex-1 min-w-0 basis-0 justify-center px-0 py-2.5'
+                    : 'w-full gap-3 px-3 py-3'
             } ${
                 isActive
                     ? 'bg-nesr-green/10 text-gray-900 shadow-sm ring-1 ring-black/5'
@@ -86,7 +88,7 @@ export function AgentButton({
             </div>
 
             {/* The name again, as a pill, for the folded row. Below the icon
-                rather than beside it: four icons sit shoulder to shoulder and
+                rather than beside it: the icons sit shoulder to shoulder and
                 a pill to the right of one would cover the next. */}
             {collapsed && (
                 <span
