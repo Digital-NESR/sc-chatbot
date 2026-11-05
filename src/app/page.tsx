@@ -659,7 +659,13 @@ const AssistantBubble = memo(function AssistantBubble({
       {incomplete && (
         <p className="mt-1 flex items-center gap-1.5 text-[11px] text-amber-700">
           <Square size={9} className="fill-current shrink-0" />
-          {incomplete === 'stopped' ? text.stoppedLabel : text.streamInterrupted}
+          {incomplete === 'stopped'
+            ? text.stoppedLabel
+            : /* The cause when the upstream named one, the general line when it
+                 did not. Saying "the connection dropped" for an answer the API
+                 cut off at a usage limit is how twenty capped turns were read
+                 as a network fault for a fortnight. */
+              (failure && text.streamInterruptedBy[failure]) || text.streamInterrupted}
         </p>
       )}
 

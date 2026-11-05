@@ -281,9 +281,36 @@ export const siteConfig = {
         // Streaming
         stopGenerating: 'Stop generating',
         stoppedLabel: 'Stopped — this answer is incomplete.',
-        // Shown under whatever text arrived before a mid-stream failure. The
-        // partial answer stays; this says not to trust it as a whole one.
+        /* Shown under whatever text arrived before a mid-stream failure. The
+           partial answer stays; this says not to trust it as a whole one.
+
+           The line below is the fallback, for when the upstream did not say
+           why - and on a reloaded conversation, where the kind is not
+           persisted. Where it did say why, the matching line in
+           streamInterruptedBy replaces it outright, which is why each of
+           those has to carry "this answer is incomplete" on its own.
+
+           They are separate from `failures` above because those replace an
+           answer and these annotate one: "this has been logged" reads as the
+           whole outcome in a failure bubble and as a footnote under half a
+           table, and the two want different wording for the same cause. */
         streamInterrupted: 'The connection dropped before this answer finished.',
+        streamInterruptedBy: {
+            refused:
+                'This answer stopped early: the service behind the assistant turned it away, usually a usage limit. This has been logged, and asking again will not help until it is cleared.',
+            timeout:
+                'This answer stopped early - it ran past the time limit. A narrower question usually comes back whole.',
+            unreachable:
+                'This answer stopped early: the assistant could not be reached. This has been logged; asking again often works.',
+            empty:
+                'This answer stopped early and the assistant produced nothing further. This has been logged.',
+            dropped:
+                'The connection dropped before this answer finished.',
+            guardrail:
+                'This answer stopped early: a guardrail stopped the rest of it. It has been logged for someone to look at.',
+            rateLimited:
+                'This answer stopped early - that is a lot of questions in a short time. Give it a few minutes and it will clear on its own.',
+        },
 
         // Login page
         login: {
