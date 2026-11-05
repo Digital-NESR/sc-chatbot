@@ -1,4 +1,4 @@
-import { Package, Truck, Search, PackageSearch, Sparkles, type LucideIcon } from 'lucide-react';
+import { Boxes, BookOpen, Store, Truck, Sparkles, type LucideIcon } from 'lucide-react';
 import Derrick from '@/components/icons/Derrick';
 
 /* ─────────────────────────────────────────────
@@ -753,7 +753,7 @@ export const siteConfig = {
         {
             id: 'material',
             name: 'Material AI',
-            icon: Package,
+            icon: Boxes,
             description: 'Inventory & Materials Expert',
             tagline: 'How can I help you manage materials and inventory today?',
             disclaimer: 'Always verify stock levels before procurement',
@@ -764,7 +764,7 @@ export const siteConfig = {
         {
             id: 'logistics',
             name: 'SC Policy AI',
-            icon: Truck,
+            icon: BookOpen,
             description: 'Supply Chain Policy Expert',
             tagline: 'How can I help you navigate Supply Chain policies today?',
             disclaimer: 'Always verify policy details with the relevant authority',
@@ -775,7 +775,7 @@ export const siteConfig = {
         {
             id: 'sourceguide',
             name: 'SourceGuide AI',
-            icon: Search,
+            icon: Store,
             description: 'Procurement & Vendor Expert',
             tagline: 'I can help you find approved suppliers and check vendor details.',
             disclaimer: 'Always confirm vendor status with procurement',
@@ -786,7 +786,7 @@ export const siteConfig = {
         {
             id: 'trackrequest',
             name: 'Track My Request',
-            icon: PackageSearch,
+            icon: Truck,
             description: 'Request & Shipment Tracking',
             tagline: 'I can track your purchase requests and shipments from approval to delivery.',
             disclaimer: 'Status may lag the source system by a few hours',
