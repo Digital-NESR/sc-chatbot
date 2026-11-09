@@ -43,6 +43,10 @@ export const DEFAULT_GROUPS: readonly NameGroup[] = [
             'core.all_plants': 'Plant list',
             'core.mat_group_description': 'Material groups',
             'core.account_classification_mapping': 'Account classifications',
+            // Static: the 2025 GCC customs tariff, imported by hand rather than
+            // loaded from Power BI. It sits under Materials AI because that is
+            // the agent that answers from it.
+            'core.hs_code': 'HS code master',
             'ai.material_embedding': 'Material description search',
         },
     },
@@ -168,6 +172,11 @@ export const DEFAULT_GROUPS: readonly NameGroup[] = [
             is_deleted: 'deleted',
             is_closed: 'closed',
             in_avl: 'on the approved list',
+            statistical_qty_unit: 'customs unit',
+            old_hs_code_8: 'pre-2025 HS code',
+            hs_code_12: 'HS code (12 digit)',
+            hs_code_8: 'HS code (8 digit)',
+            hs_code_6: 'HS heading (6 digit)',
         },
     },
     {
