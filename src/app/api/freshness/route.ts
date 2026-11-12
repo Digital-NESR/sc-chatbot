@@ -115,7 +115,20 @@ function build(rows: RawRow[]): FreshnessReport {
             daysSince: toNumber(r.days_since_load),
         }));
 
-    const neverLoaded = sources.filter((s) => s.neverLoaded).map((s) => s.table);
+    /* Static sources are excluded here, and only here - the row still shows
+       "never loaded" in the panel, it just cannot turn the whole indicator red.
+
+       `never_loaded` means the Data Loader has no record of a run, which is not
+       the same as the table being empty. A static table has no Power BI source
+       and is imported by hand, so it has no run to record: the HS code master
+       sat at 13,449 complete rows while the button above every answer read
+       "1 source has never loaded" in red. That is the warning-fatigue failure
+       this component exists to avoid, spent on a table that was fine.
+
+       An empty static table is still worth knowing about, but the loader's log
+       cannot be what tells us - it is the wrong instrument for a source it
+       never touches. */
+    const neverLoaded = sources.filter((s) => s.neverLoaded && s.mode !== 'static').map((s) => s.table);
 
     // Static tables are reference data - plant lists, account mappings. They are
     // loaded once and are not stale at seventeen days, so counting them would
