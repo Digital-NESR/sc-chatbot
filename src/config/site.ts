@@ -375,7 +375,7 @@ export const siteConfig = {
         trackrequest: [
             'Tracing request',
             'Checking status',
-            'Locating shipment',
+            'Checking in transit',
             'Reading updates',
             'Following PO',
             'Checking approvals',
@@ -431,7 +431,7 @@ export const siteConfig = {
         ],
         trackrequest: [
             'What is the status of my request: ',
-            'Where is the shipment for PO: ',
+            'How much is in transit for PO: ',
             'Who is holding up PR: ',
             'Who is the bottleneck in approvals right now?',             // 35s
             'Which requests are stuck waiting for approval right now?',   // 37s
@@ -876,8 +876,8 @@ export const siteConfig = {
             id: 'trackrequest',
             name: 'Track My Request',
             icon: Truck,
-            description: 'Request & Shipment Tracking',
-            tagline: 'I can track your purchase requests and shipments from approval to delivery.',
+            description: 'Request Tracking',
+            tagline: 'I can track your purchase requests from approval to delivery.',
             disclaimer: 'Status may lag the source system by a few hours',
             webhookUrl: process.env.NEXT_PUBLIC_TRACKREQUEST_WEBHOOK || '',
             streamWebhookUrl: process.env.NEXT_PUBLIC_TRACKREQUEST_STREAM_WEBHOOK || '',

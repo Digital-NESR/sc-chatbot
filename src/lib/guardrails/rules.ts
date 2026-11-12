@@ -79,7 +79,6 @@ const INTERNAL_DOMAIN = 'nesr.com';
    try to move a reader somewhere. */
 const LINK_ALLOWLIST = [
     'nesr.com',
-    'shipwaves.com',
     'app.powerbi.com',
     'sharepoint.com',
     'microsoft.com',

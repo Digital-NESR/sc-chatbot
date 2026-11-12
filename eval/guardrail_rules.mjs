@@ -11,7 +11,7 @@
  */
 
 export const LINK_ALLOWLIST = [
-  'nesr.com', 'shipwaves.com', 'app.powerbi.com',
+  'nesr.com', 'app.powerbi.com',
   'sharepoint.com', 'microsoft.com', 'office.com',
 ];
 

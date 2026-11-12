@@ -121,8 +121,6 @@ export const DEFAULT_GROUPS: readonly NameGroup[] = [
             query_sns_registry_db: 'the sole-source registry',
             query_catalog_manager_db: 'the contracted price catalogue',
             search_policy: 'the policy documents',
-            AirAPI: 'air shipment tracking',
-            OceanAPI: 'sea shipment tracking',
             ask_material_ai: 'Material AI',
             ask_track_my_request: 'Track My Request',
             ask_sc_policy_ai: 'SC Policy AI',
